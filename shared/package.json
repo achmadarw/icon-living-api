@@ -1,0 +1,37 @@
+{
+  "name": "@tia/shared",
+  "version": "0.0.2",
+  "description": "Shared types, schemas, and constants for Icon Living project",
+  "private": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/icon-living-shared.git"
+  },
+  "keywords": [
+    "icon-living",
+    "shared",
+    "schemas",
+    "types"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

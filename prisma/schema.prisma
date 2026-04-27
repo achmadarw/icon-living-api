@@ -1,0 +1,277 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  WARGA
+  BENDAHARA
+  KETUA
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum NotificationType {
+  PAYMENT_SUBMITTED
+  PAYMENT_APPROVED
+  PAYMENT_REJECTED
+  EXPENSE_SUBMITTED
+  EXPENSE_APPROVED
+  EXPENSE_REJECTED
+  EXPENSE_AUTO_APPROVED
+  USER_CREATED
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+  WEB
+}
+
+// ─── Master Data ────────────────────────────────────────
+
+model PaymentType {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  fixedAmount Decimal? @db.Decimal(15, 2)
+  isMandatory Boolean  @default(false)
+  isActive    Boolean  @default(true)
+
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payment_types")
+}
+
+model ExpenseCategory {
+  id               String  @id @default(cuid())
+  name             String
+  description      String?
+  requiresApproval Boolean @default(true)
+  isActive         Boolean @default(true)
+
+  expenses Expense[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("expense_categories")
+}
+
+// ─── Core Models ────────────────────────────────────────
+
+model User {
+  id           String  @id @default(cuid())
+  name         String
+  username     String  @unique
+  phone        String?
+  passwordHash String
+  role         Role    @default(WARGA)
+  address      String?
+  unitNumber   String? @unique
+  avatarUrl    String?
+  isActive     Boolean @default(true)
+
+  payments         Payment[]      @relation("PaymentSubmitter")
+  reviewedPayments Payment[]      @relation("PaymentReviewer")
+  requestedExpenses Expense[]     @relation("ExpenseRequester")
+  approvedExpenses  Expense[]     @relation("ExpenseApprover")
+  notifications    Notification[]
+  refreshTokens    RefreshToken[]
+  fcmTokens        FcmToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model FcmToken {
+  id        String         @id @default(cuid())
+  token     String         @unique
+  platform  DevicePlatform
+  userId    String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("fcm_tokens")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  amount        Decimal       @db.Decimal(15, 2) // Total = fixedAmount × jumlah periode (jika fixed)
+  bankName      String
+  accountName   String?
+  transferDate  DateTime
+  proofImageUrl String
+  description   String?
+  status        PaymentStatus @default(PENDING)
+  reviewNote    String?
+  reviewedAt    DateTime?
+
+  userId        String
+  paymentTypeId String
+  reviewedById  String?
+
+  user        User            @relation("PaymentSubmitter", fields: [userId], references: [id])
+  paymentType PaymentType     @relation(fields: [paymentTypeId], references: [id])
+  reviewedBy  User?           @relation("PaymentReviewer", fields: [reviewedById], references: [id])
+  periods     PaymentPeriod[] // Multi-periode: ["2026-01", "2026-02", ...]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([paymentTypeId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+// Junction table untuk multi-periode payment
+model PaymentPeriod {
+  id        String @id @default(cuid())
+  period    String // Format: "2026-01"
+  paymentId String
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentId, period])
+  @@index([period])
+  @@map("payment_periods")
+}
+
+model Expense {
+  id            String        @id @default(cuid())
+  amount        Decimal       @db.Decimal(15, 2)
+  description   String
+  attachmentUrl String?
+  status        ExpenseStatus @default(DRAFT)
+  approvalNote  String?
+  approvedAt    DateTime?
+
+  categoryId    String
+  requestedById String
+  approvedById  String?
+  transactionId String?       @unique
+
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id])
+  requestedBy User            @relation("ExpenseRequester", fields: [requestedById], references: [id])
+  approvedBy  User?           @relation("ExpenseApprover", fields: [approvedById], references: [id])
+  transaction Transaction?    @relation(fields: [transactionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([requestedById])
+  @@index([status])
+  @@index([createdAt])
+  @@map("expenses")
+}
+
+// ─── Ledger ─────────────────────────────────────────────
+
+model Transaction {
+  id            String          @id @default(cuid())
+  type          TransactionType
+  amount        Decimal         @db.Decimal(15, 2)
+  description   String
+  balanceBefore Decimal         @db.Decimal(15, 2)
+  balanceAfter  Decimal         @db.Decimal(15, 2)
+
+  referenceId   String?
+  referenceType String?         // "PAYMENT" atau "EXPENSE"
+
+  expense Expense? // 1:1 with Expense only; Payment uses 1:N via referenceId
+
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([createdAt])
+  @@index([referenceType, referenceId])
+  @@map("transactions")
+}
+
+// ─── Notifications ──────────────────────────────────────
+
+model Notification {
+  id            String           @id @default(cuid())
+  type          NotificationType
+  title         String
+  message       String
+  referenceId   String?
+  referenceType String?
+  isRead        Boolean          @default(false)
+  readAt        DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ─── Audit ──────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String
+  userId    String
+  oldData   Json?
+  newData   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
