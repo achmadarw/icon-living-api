@@ -295,8 +295,8 @@ export class PaymentService {
       pendingMap.get(uid)!.add(p.period);
     }
 
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    const relevantMonths = allMonths.filter((m) => m <= currentMonth);
+    // const currentMonth = new Date().toISOString().slice(0, 7);
+    const relevantMonths = allMonths;
 
     const arrears = users.map((user) => {
       const paid = paidMap.get(user.id) ?? new Set();

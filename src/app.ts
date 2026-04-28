@@ -8,6 +8,7 @@ import { apiRateLimit, authRateLimit } from './middleware/rate-limit';
 import { sanitize } from './middleware/sanitize';
 import { errorHandler } from './middleware/error-handler';
 import routes from './routes';
+import path from 'path';  
 
 export function createApp(): Express {
   const app = express();
@@ -58,6 +59,9 @@ export function createApp(): Express {
 
   // ─── Error Handler (must be last) ────────────────────
   app.use(errorHandler);
+
+  // ─── Static Files (uploads) ──────────────────────── ← TAMBAH INI
+  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
   return app;
 }

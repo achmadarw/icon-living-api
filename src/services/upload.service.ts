@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import crypto from 'crypto';
 import { AppError } from '../utils/errors';
 import { UPLOAD } from '@tia/shared';
+import { config } from '../config';  // tambah ini
 
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 
@@ -29,7 +30,17 @@ export class UploadService {
 
     await fs.writeFile(filepath, buffer);
 
-    return `/uploads/${filename}`;
+    const baseUrl = this.getBaseUrl();
+    return `${baseUrl}/uploads/${filename}`;
+  }
+
+  private getBaseUrl(): string {
+    if (config.isProduction) {
+      // Di production, set APP_URL di .env
+      return process.env.APP_URL ?? 'https://api.tia-acropolis.com';
+    }
+    // Di development, gunakan host lokal dengan port dari config
+    return `http://localhost:${config.port}`;
   }
 
   private getExtFromMime(mime: string): string {
