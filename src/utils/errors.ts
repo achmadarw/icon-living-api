@@ -67,3 +67,15 @@ export class RateLimitError extends AppError {
     super(429, 'RATE_LIMIT', 'Terlalu banyak request. Coba lagi nanti.');
   }
 }
+
+export class LoginAttemptsExceededError extends AppError {
+  constructor(remainingSeconds: number) {
+    const minutes = Math.ceil(remainingSeconds / 60);
+    super(
+      429,
+      'RATE_LIMIT',
+      `Terlalu banyak percobaan login. Coba lagi dalam ${minutes} menit.`,
+      { remainingSeconds, retryAfter: remainingSeconds }
+    );
+  }
+}

@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 import { config } from './config';
 import { swaggerSpec } from './lib/swagger';
-import { apiRateLimit, authRateLimit } from './middleware/rate-limit';
+import { apiRateLimit } from './middleware/rate-limit';
 import { sanitize } from './middleware/sanitize';
 import { errorHandler } from './middleware/error-handler';
 import routes from './routes';
@@ -48,7 +48,8 @@ export function createApp(): Express {
   // ─── Rate Limiting ───────────────────────────────────
   if (!config.isTest) {
     app.use('/v1', apiRateLimit);
-    app.use('/v1/auth', authRateLimit);
+    // NOTE: Login rate limiting now handled per-username by LoginAttemptsService
+    // This prevents IP-based blocking that affects multiple users
   }
 
   // ─── API Docs ────────────────────────────────────────
