@@ -70,8 +70,17 @@ export function getIO(): SocketServer | null {
 // ─── Emit helpers ─────────────────────────────────────
 
 export function emitToUser(userId: string, event: string, data: unknown) {
-  if (!io) return;
+  if (!io) {
+    console.warn('[socket.emitToUser] ⚠️ Socket.IO not initialized');
+    return;
+  }
+  console.log('[socket.emitToUser] 📤 EMITTING EVENT', {
+    userId,
+    event,
+    dataType: typeof data,
+  });
   io.to(`user:${userId}`).emit(event, data);
+  console.log('[socket.emitToUser] ✅ EMITTED to room:', `user:${userId}`);
 }
 
 export function emitToUsers(userIds: string[], event: string, data: unknown) {

@@ -25,15 +25,45 @@ function dispatchPushAsync(
   userIds: string[],
   notif: { type: NotificationType; title: string; message: string; referenceId?: string | null; referenceType?: string | null },
 ): void {
-  if (!isFirebaseReady() || userIds.length === 0) return;
+  if (!isFirebaseReady() || userIds.length === 0) {
+    console.log('[notification.dispatchPushAsync] ⚠️ SKIPPED', {
+      firebaseReady: isFirebaseReady(),
+      userIdsCount: userIds.length,
+      userIds,
+      notifType: notif.type,
+    });
+    return;
+  }
+
+  console.log('[notification.dispatchPushAsync] 📤 SCHEDULED', {
+    userIds,
+    notifType: notif.type,
+    title: notif.title,
+  });
 
   // Schedule on next tick — never block the current call stack.
   setImmediate(async () => {
     try {
+      console.log('[notification.dispatchPushAsync] 🔍 GETTING FCM TOKENS for users:', userIds);
       const tokens = await fcmTokenService.getTokensForUsers(userIds);
-      if (tokens.length === 0) return;
+      
+      console.log('[notification.dispatchPushAsync] 📋 FCM TOKENS RETRIEVED', {
+        userIds,
+        tokensCount: tokens.length,
+        tokens: tokens.slice(0, 3).map(t => `${t.substring(0, 20)}...`), // Log first 3 tokens truncated
+      });
+      
+      if (tokens.length === 0) {
+        console.warn('[notification.dispatchPushAsync] ❌ NO TOKENS FOUND for users:', userIds);
+        return;
+      }
 
-      const { invalidTokens } = await sendFcmToTokens(tokens, {
+      console.log('[notification.dispatchPushAsync] 🚀 SENDING FCM to', tokens.length, 'token(s)', {
+        notifType: notif.type,
+        title: notif.title,
+      });
+      
+      const { invalidTokens, successCount, failureCount } = await sendFcmToTokens(tokens, {
         title: notif.title,
         body: notif.message,
         data: {
@@ -43,17 +73,34 @@ function dispatchPushAsync(
         },
       });
 
+      console.log('[notification.dispatchPushAsync] ✅ FCM SEND COMPLETE', {
+        successCount,
+        failureCount,
+        invalidTokensCount: invalidTokens.length,
+      });
+
       if (invalidTokens.length > 0) {
+        console.log('[notification.dispatchPushAsync] 🧹 REMOVING', invalidTokens.length, 'invalid tokens');
         await fcmTokenService.removeInvalidTokens(invalidTokens);
       }
     } catch (err) {
-      console.error('[notification] FCM dispatch failed:', err);
+      console.error('[notification.dispatchPushAsync] ❌ FAILED:', err);
     }
   });
 }
 
 export class NotificationService {
   async create(input: CreateNotificationInput) {
+    console.log('\n\n========== 📬 NOTIFICATION CREATE START ==========');
+    console.log('[notification.create] 📝 INPUT', {
+      userId: input.userId,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      referenceId: input.referenceId,
+      referenceType: input.referenceType,
+    });
+
     const notification = await prisma.notification.create({
       data: {
         type: input.type,
@@ -65,10 +112,21 @@ export class NotificationService {
       },
     });
 
+    console.log('[notification.create] ✅ SAVED TO DB', {
+      id: notification.id,
+      userId: notification.userId,
+      type: notification.type,
+      isRead: notification.isRead,
+      createdAt: notification.createdAt,
+    });
+
     // Emit real-time notification
+    console.log('[notification.create] 📡 EMITTING SOCKET EVENT to user:', input.userId);
     emitToUser(input.userId, 'notification:new', notification);
+    console.log('[notification.create] ✅ SOCKET EMIT CALLED');
 
     // Fire-and-forget FCM push
+    console.log('[notification.create] 🔔 DISPATCHING FCM ASYNC');
     dispatchPushAsync([input.userId], {
       type: input.type,
       title: input.title,
@@ -76,6 +134,8 @@ export class NotificationService {
       referenceId: input.referenceId ?? null,
       referenceType: input.referenceType ?? null,
     });
+    console.log('[notification.create] ✅ FCM DISPATCH SCHEDULED (async, fire-and-forget)');
+    console.log('========== 📬 NOTIFICATION CREATE END ==========\n\n');
 
     return notification;
   }
@@ -200,7 +260,15 @@ export class NotificationService {
     paymentTypeName: string;
     amount: number;
   }) {
-    return this.create({
+    console.log('\n\n========== 💳 PAYMENT APPROVED TRIGGER ==========');
+    console.log('[notification.onPaymentApproved] 🔔 TRIGGERED', {
+      paymentId: payment.id,
+      userId: payment.userId,
+      paymentType: payment.paymentTypeName,
+      amount: payment.amount,
+    });
+    
+    const result = await this.create({
       type: 'PAYMENT_APPROVED' as NotificationType,
       title: 'Pembayaran Disetujui',
       message: `Pembayaran ${payment.paymentTypeName} sebesar Rp ${payment.amount.toLocaleString('id-ID')} telah disetujui`,
@@ -208,6 +276,11 @@ export class NotificationService {
       referenceId: payment.id,
       referenceType: 'PAYMENT',
     });
+    
+    console.log('[notification.onPaymentApproved] ✅ NOTIFICATION CREATED', { id: result.id });
+    console.log('========== 💳 PAYMENT APPROVED TRIGGER END ==========\n\n');
+    
+    return result;
   }
 
   async onPaymentRejected(payment: {

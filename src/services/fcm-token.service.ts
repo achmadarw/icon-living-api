@@ -114,12 +114,37 @@ export class FcmTokenService {
    * dispatching push to multiple recipients (e.g. all BENDAHARA).
    */
   async getTokensForUsers(userIds: string[]): Promise<string[]> {
-    if (userIds.length === 0) return [];
+    if (userIds.length === 0) {
+      console.log('[fcm-token.getTokensForUsers] ⚠️ EMPTY USER IDS');
+      return [];
+    }
+
+    console.log('[fcm-token.getTokensForUsers] 🔍 QUERYING FCM TOKENS', {
+      userIds,
+      userIdsCount: userIds.length,
+    });
+
     const rows = await prisma.fcmToken.findMany({
       where: { userId: { in: userIds } },
-      select: { token: true },
+      select: { token: true, userId: true },
     });
-    return rows.map((r) => r.token);
+
+    const tokens = rows.map((r) => r.token);
+
+    console.log('[fcm-token.getTokensForUsers] 📋 FOUND TOKENS', {
+      userIds,
+      tokensCount: tokens.length,
+      byUser: userIds.map(uid => ({
+        userId: uid,
+        tokenCount: rows.filter(r => r.userId === uid).length,
+      })),
+    });
+
+    if (tokens.length === 0) {
+      console.warn('[fcm-token.getTokensForUsers] ⚠️ NO TOKENS FOUND for users:', userIds);
+    }
+
+    return tokens;
   }
 
   async getTokensForUser(userId: string): Promise<string[]> {
