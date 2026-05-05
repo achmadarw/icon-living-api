@@ -101,13 +101,18 @@ export class ExpenseService {
     });
   }
 
-  async findAll(query: ExpenseQuery) {
+  async findAll(requester: { userId: string; role: string }, query: ExpenseQuery) {
     const { page = 1, limit = 20, status, categoryId } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.ExpenseWhereInput = {};
     if (status) where.status = status;
     if (categoryId) where.categoryId = categoryId;
+
+    // If the query requests submitted expenses, only KETUA may see them.
+    if (status === 'SUBMITTED' && requester?.role !== 'KETUA') {
+      return { expenses: [], total: 0 };
+    }
 
     const [expenses, total] = await prisma.$transaction([
       prisma.expense.findMany({

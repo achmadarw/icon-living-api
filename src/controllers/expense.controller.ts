@@ -15,7 +15,20 @@ export class ExpenseController {
 
   async findAll(req: Request, res: Response, next: NextFunction) {
     try {
-      const { expenses, total } = await expenseService.findAll(req.query as any);
+      const { expenses, total } = await expenseService.findAll(
+        { userId: req.user!.userId, role: req.user!.role },
+        req.query as any,
+      );
+
+      // If requester is not KETUA and asked for submitted expenses, return empty.
+      const status = (req.query.status as string) || undefined;
+      if (status === 'SUBMITTED' && req.user!.role !== 'KETUA') {
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 20;
+        const meta = buildPaginationMeta(page, limit, 0);
+        return sendSuccess(res, [], 200, meta);
+      }
+
       const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 20;
       const meta = buildPaginationMeta(page, limit, total);
