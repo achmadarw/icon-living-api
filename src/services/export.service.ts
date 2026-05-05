@@ -51,7 +51,7 @@ const MONTHS_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli
 
 // ─── PDF Helper ─────────────────────────────────────────
 
-function generatePdfBuffer(buildFn: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
+function generatePdfBuffer(buildFn: (doc: any) => void): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
     const chunks: Buffer[] = [];
