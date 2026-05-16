@@ -4,6 +4,14 @@ import { validate } from '../middleware/validate';
 import { authenticate } from '../middleware/authenticate';
 import { authorize } from '../middleware/authorize';
 import { paginationSchema } from '@tia/shared';
+import { z } from 'zod';
+
+const transactionQuerySchema = paginationSchema.extend({
+  type: z.enum(['INCOME', 'EXPENSE']).optional(),
+  search: z.string().trim().optional(),
+  sortBy: z.enum(['createdAt', 'amount']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+});
 
 const router: RouterType = Router();
 
@@ -16,6 +24,6 @@ router.get('/cash-flow', (req, res, next) => transactionController.getCashFlow(r
 router.get('/dashboard', (req, res, next) => transactionController.getDashboard(req, res, next));
 
 // Transaction list — accessible by all authenticated roles
-router.get('/', validate(paginationSchema, 'query'), (req, res, next) => transactionController.findAll(req, res, next));
+router.get('/', validate(transactionQuerySchema, 'query'), (req, res, next) => transactionController.findAll(req, res, next));
 
 export default router;
