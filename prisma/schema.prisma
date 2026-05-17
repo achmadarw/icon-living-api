@@ -50,6 +50,34 @@ enum DevicePlatform {
   WEB
 }
 
+enum OccupancyStatus {
+  PEMILIK
+  KONTRAK
+  KELUARGA
+  LAINNYA
+}
+
+enum HomeCurrentStatus {
+  DIHUNI
+  KOSONG
+  DISEWAKAN
+  RENOVASI
+  LAINNYA
+}
+
+enum VehicleType {
+  MOBIL
+  MOTOR
+  SEPEDA
+  LAINNYA
+}
+
+enum HouseholdStaffRole {
+  ART
+  SOPIR
+  LAINNYA
+}
+
 // ─── Master Data ────────────────────────────────────────
 
 model PaymentType {
@@ -96,6 +124,7 @@ model User {
   unitNumber   String? @unique
   avatarUrl    String?
   isActive     Boolean @default(true)
+  householdId  String?
 
   payments         Payment[]      @relation("PaymentSubmitter")
   reviewedPayments Payment[]      @relation("PaymentReviewer")
@@ -104,11 +133,120 @@ model User {
   notifications    Notification[]
   refreshTokens    RefreshToken[]
   fcmTokens        FcmToken[]
+  household        Household?      @relation(fields: [householdId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("users")
+}
+
+model Household {
+  id                String            @id @default(cuid())
+  unitNumber        String            @unique
+  occupancyStatus   OccupancyStatus?
+  occupancyNote     String?
+  homeCurrentStatus HomeCurrentStatus?
+  homeStatusNote    String?
+  residentCount     Int?
+  emergencyContact  String?
+  hobbies           String?
+  consentGiven      Boolean?
+  formSubmittedAt   DateTime?
+  sourceRaw         Json?
+
+  users             User[]
+  members           HouseholdMember[]
+  vehicles          HouseholdVehicle[]
+  staff             HouseholdStaff[]
+  emergencyContacts HouseholdEmergencyContact[]
+  hobbiesDetail     HouseholdHobby[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("households")
+}
+
+model HouseholdMember {
+  id            String    @id @default(cuid())
+  householdId   String
+  name          String?
+  age           Int?
+  relationLabel String?
+  isPrimary     Boolean   @default(false)
+  notes         String?
+  rawText       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+  @@map("household_members")
+}
+
+model HouseholdVehicle {
+  id          String      @id @default(cuid())
+  householdId String
+  type        VehicleType @default(LAINNYA)
+  plateNumber String?
+  color       String?
+  description String?
+  rawText     String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+  @@map("household_vehicles")
+}
+
+model HouseholdStaff {
+  id          String             @id @default(cuid())
+  householdId String
+  name        String?
+  role        HouseholdStaffRole @default(LAINNYA)
+  isLiveIn    Boolean?
+  description String?
+  rawText     String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+  @@map("household_staff")
+}
+
+model HouseholdEmergencyContact {
+  id          String   @id @default(cuid())
+  householdId String
+  name        String?
+  phone       String?
+  relation    String?
+  priority    Int      @default(1)
+  rawText     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+  @@map("household_emergency_contacts")
+}
+
+model HouseholdHobby {
+  id          String   @id @default(cuid())
+  householdId String
+  hobbyText   String
+  createdAt   DateTime @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+  @@map("household_hobbies")
 }
 
 model FcmToken {

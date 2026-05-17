@@ -13,7 +13,9 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:import:households": "tsx prisma/import-households-from-form.ts",
+    "db:create-users:households": "tsx prisma/create-users-from-households.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",
@@ -29,6 +31,7 @@
     "socket.io": "^4.8.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.0"
   },
   "devDependencies": {
