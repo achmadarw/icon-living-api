@@ -28,6 +28,10 @@ export class AuthService {
       throw new UnauthorizedError('Username atau password salah');
     }
 
+    if (!user.isActivated) {
+      throw new UnauthorizedError('Akun belum diaktivasi. Silakan aktivasi akun terlebih dahulu.');
+    }
+
     logger.debug('User found in database', {
       id: user.id,
       username: user.username,

@@ -25,7 +25,30 @@ export const deleteFcmTokenSchema = z.object({
   token: z.string().min(1, 'Token diperlukan'),
 });
 
+export const activationUnitsQuerySchema = z.object({
+  q: z.string().optional(),
+});
+
+export const requestActivationOtpSchema = z.object({
+  unitNumber: z.string().min(2, 'Nomor rumah diperlukan'),
+});
+
+export const verifyActivationOtpSchema = z.object({
+  unitNumber: z.string().min(2, 'Nomor rumah diperlukan'),
+  otp: z.string().min(4, 'OTP tidak valid').max(8, 'OTP tidak valid'),
+});
+
+export const setActivationPasswordSchema = z.object({
+  unitNumber: z.string().min(2, 'Nomor rumah diperlukan'),
+  activationToken: z.string().min(10, 'Activation token tidak valid'),
+  password: z.string().min(8, 'Password minimal 8 karakter'),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
 export type FcmTokenInput = z.infer<typeof fcmTokenSchema>;
 export type DeleteFcmTokenInput = z.infer<typeof deleteFcmTokenSchema>;
+export type ActivationUnitsQuery = z.infer<typeof activationUnitsQuerySchema>;
+export type RequestActivationOtpInput = z.infer<typeof requestActivationOtpSchema>;
+export type VerifyActivationOtpInput = z.infer<typeof verifyActivationOtpSchema>;
+export type SetActivationPasswordInput = z.infer<typeof setActivationPasswordSchema>;

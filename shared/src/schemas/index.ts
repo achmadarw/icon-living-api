@@ -3,12 +3,20 @@ export {
   refreshTokenSchema,
   fcmTokenSchema,
   deleteFcmTokenSchema,
+  activationUnitsQuerySchema,
+  requestActivationOtpSchema,
+  verifyActivationOtpSchema,
+  setActivationPasswordSchema,
 } from './auth.schema';
 export type {
   LoginInput,
   RefreshTokenInput,
   FcmTokenInput,
   DeleteFcmTokenInput,
+  ActivationUnitsQuery,
+  RequestActivationOtpInput,
+  VerifyActivationOtpInput,
+  SetActivationPasswordInput,
 } from './auth.schema';
 
 export {

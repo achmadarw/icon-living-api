@@ -4,6 +4,7 @@ import { sendSuccess, sendNoContent } from '../utils/response';
 import { logger } from '../utils/logger';
 import { LoginAttemptsService } from '../services/login-attempts.service';
 import { LoginAttemptsExceededError } from '../utils/errors';
+import { accountActivationService } from '../services/account-activation.service';
 
 export class AuthController {
   async login(req: Request, res: Response, next: NextFunction) {
@@ -80,6 +81,47 @@ export class AuthController {
       sendNoContent(res);
     } catch (err) {
       logger.error('❌ LOGOUT FAILED', err);
+      next(err);
+    }
+  }
+
+  async activationUnits(req: Request, res: Response, next: NextFunction) {
+    try {
+      const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+      const rows = await accountActivationService.listPendingUnits(q);
+      sendSuccess(res, rows);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async requestActivationOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await accountActivationService.requestOtp(req.body.unitNumber);
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async verifyActivationOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await accountActivationService.verifyOtp(req.body.unitNumber, req.body.otp);
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async setActivationPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await accountActivationService.setPassword(
+        req.body.unitNumber,
+        req.body.activationToken,
+        req.body.password,
+      );
+      sendSuccess(res, result);
+    } catch (err) {
       next(err);
     }
   }

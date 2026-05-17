@@ -29,7 +29,7 @@ function sanitizePhone(raw: string | null): string | null {
 async function main() {
   const tempPassword = process.env.TEMP_USER_PASSWORD ?? 'Warga@12345';
   const defaultRole = (process.env.DEFAULT_USER_ROLE as Role | undefined) ?? 'WARGA';
-  const activateUser = process.env.ACTIVATE_USER === 'true';
+  const activateUser = process.env.ACTIVATE_USER !== 'false';
   const rounds = Number.parseInt(process.env.BCRYPT_ROUNDS ?? '10', 10);
   const passwordHash = await bcrypt.hash(tempPassword, Number.isFinite(rounds) ? rounds : 10);
 
@@ -70,6 +70,7 @@ async function main() {
         unitNumber: household.unitNumber,
         address: household.unitNumber,
         isActive: activateUser,
+        isActivated: false,
         householdId: household.id,
       },
     });
