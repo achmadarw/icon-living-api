@@ -15,6 +15,8 @@ interface IplPeriodFlowItem {
   targetAmount: number;
   receivedAmount: number;
   coverageRate: number;
+  transactionCount: number;
+  payerCount: number;
 }
 
 export class TransactionService {
@@ -127,6 +129,8 @@ export class TransactionService {
         targetAmount: 0,
         receivedAmount: 0,
         coverageRate: 0,
+        transactionCount: 0,
+        payerCount: 0,
       }));
     }
 
@@ -145,6 +149,7 @@ export class TransactionService {
         period: true,
         payment: {
           select: {
+            userId: true,
             amount: true,
             periods: { select: { id: true } },
           },
@@ -153,10 +158,17 @@ export class TransactionService {
     });
 
     const receivedByPeriod = new Map<string, number>();
+    const transactionCountByPeriod = new Map<string, number>();
+    const payerSetByPeriod = new Map<string, Set<string>>();
     for (const item of paidPeriods) {
       const periodCount = item.payment.periods.length || 1;
       const amountPerPeriod = item.payment.amount.toNumber() / periodCount;
       receivedByPeriod.set(item.period, (receivedByPeriod.get(item.period) ?? 0) + amountPerPeriod);
+      transactionCountByPeriod.set(item.period, (transactionCountByPeriod.get(item.period) ?? 0) + 1);
+      if (!payerSetByPeriod.has(item.period)) {
+        payerSetByPeriod.set(item.period, new Set<string>());
+      }
+      payerSetByPeriod.get(item.period)!.add(item.payment.userId);
     }
 
     return periods.map((period) => {
@@ -168,6 +180,8 @@ export class TransactionService {
         targetAmount,
         receivedAmount,
         coverageRate,
+        transactionCount: transactionCountByPeriod.get(period) ?? 0,
+        payerCount: payerSetByPeriod.get(period)?.size ?? 0,
       };
     });
   }
