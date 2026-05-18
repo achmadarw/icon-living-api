@@ -6,7 +6,7 @@ const options: swaggerJsdoc.Options = {
     info: {
       title: 'TIA - The Icon Acropolis API',
       version: '1.0.0',
-      description: 'REST API untuk sistem manajemen keuangan perumahan TIA',
+      description: 'REST API untuk sistem paguyuban perumahan TIA',
     },
     servers: [
       {
