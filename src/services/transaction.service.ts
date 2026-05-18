@@ -9,6 +9,14 @@ interface TransactionQuery extends PaginationQuery {
   sortOrder?: 'asc' | 'desc';
 }
 
+interface IplPeriodFlowItem {
+  month: string;
+  period: string;
+  targetAmount: number;
+  receivedAmount: number;
+  coverageRate: number;
+}
+
 export class TransactionService {
   async findAll(query: TransactionQuery) {
     const { page = 1, limit = 20, type, search, sortBy = 'createdAt', sortOrder = 'desc' } = query;
@@ -92,6 +100,76 @@ export class TransactionService {
     );
 
     return cashFlow;
+  }
+
+  async getIplPeriodFlow(year: number): Promise<IplPeriodFlowItem[]> {
+    const months = Array.from({ length: 12 }, (_, i) => i + 1);
+    const periods = months.map((month) => `${year}-${String(month).padStart(2, '0')}`);
+
+    const [iplType, totalActiveUsers] = await prisma.$transaction([
+      prisma.paymentType.findFirst({
+        where: {
+          isActive: true,
+          OR: [
+            { isMandatory: true },
+            { name: { contains: 'IPL', mode: 'insensitive' } },
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.user.count({ where: { isActive: true } }),
+    ]);
+
+    if (!iplType) {
+      return periods.map((period) => ({
+        month: period,
+        period,
+        targetAmount: 0,
+        receivedAmount: 0,
+        coverageRate: 0,
+      }));
+    }
+
+    const fixedAmount = iplType.fixedAmount?.toNumber() ?? 0;
+    const targetAmount = fixedAmount * totalActiveUsers;
+
+    const paidPeriods = await prisma.paymentPeriod.findMany({
+      where: {
+        period: { in: periods },
+        payment: {
+          status: 'APPROVED',
+          paymentTypeId: iplType.id,
+        },
+      },
+      select: {
+        period: true,
+        payment: {
+          select: {
+            amount: true,
+            periods: { select: { id: true } },
+          },
+        },
+      },
+    });
+
+    const receivedByPeriod = new Map<string, number>();
+    for (const item of paidPeriods) {
+      const periodCount = item.payment.periods.length || 1;
+      const amountPerPeriod = item.payment.amount.toNumber() / periodCount;
+      receivedByPeriod.set(item.period, (receivedByPeriod.get(item.period) ?? 0) + amountPerPeriod);
+    }
+
+    return periods.map((period) => {
+      const receivedAmount = Math.round((receivedByPeriod.get(period) ?? 0) * 100) / 100;
+      const coverageRate = targetAmount > 0 ? Math.round((receivedAmount / targetAmount) * 10000) / 100 : 0;
+      return {
+        month: period,
+        period,
+        targetAmount,
+        receivedAmount,
+        coverageRate,
+      };
+    });
   }
 
   async getDashboard() {

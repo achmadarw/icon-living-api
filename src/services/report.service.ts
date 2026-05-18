@@ -10,6 +10,7 @@ export interface IplResidentStatus {
   unitNumber: string | null;
   status: 'LUNAS' | 'PENDING' | 'BELUM';
   paymentId?: string;
+  transferAmount: number;
 }
 
 export interface IplMonthlyReport {
@@ -19,7 +20,7 @@ export interface IplMonthlyReport {
   paymentTypeName: string;
   fixedAmount: number | null;
   residents: IplResidentStatus[];
-  summary: { total: number; lunas: number; pending: number; belumBayar: number };
+  summary: { total: number; lunas: number; pending: number; belumBayar: number; totalNominalMasuk: number; totalNominalPending: number };
 }
 
 export interface IncomeReportItem {
@@ -75,7 +76,10 @@ export class ReportService {
     });
 
     if (!iplType) {
-      return { month, year, period, paymentTypeName: 'IPL', fixedAmount: null, residents: [], summary: { total: 0, lunas: 0, pending: 0, belumBayar: 0 } };
+      return {
+        month, year, period, paymentTypeName: 'IPL', fixedAmount: null, residents: [],
+        summary: { total: 0, lunas: 0, pending: 0, belumBayar: 0, totalNominalMasuk: 0, totalNominalPending: 0 },
+      };
     }
 
     const [users, paymentPeriods] = await prisma.$transaction([
@@ -86,24 +90,51 @@ export class ReportService {
       }),
       prisma.paymentPeriod.findMany({
         where: { period, payment: { paymentTypeId: iplType.id } },
-        select: { period: true, payment: { select: { id: true, userId: true, status: true } } },
+        select: {
+          period: true,
+          payment: {
+            select: {
+              id: true,
+              userId: true,
+              status: true,
+              amount: true,
+              periods: { select: { id: true } },
+            },
+          },
+        },
       }),
     ]);
 
-    const statusMap = new Map<string, { status: 'LUNAS' | 'PENDING'; paymentId: string }>();
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const statusMap = new Map<string, { status: 'LUNAS' | 'PENDING'; paymentId: string; transferAmount: number }>();
+    let totalNominalMasuk = 0;
+    let totalNominalPending = 0;
+
     for (const pp of paymentPeriods) {
       const uid = pp.payment.userId;
       const cur = statusMap.get(uid);
+      const periodsCount = pp.payment.periods.length || 1;
+      const amountPerPeriod = round2(pp.payment.amount.toNumber() / periodsCount);
+
       if (pp.payment.status === 'APPROVED') {
-        statusMap.set(uid, { status: 'LUNAS', paymentId: pp.payment.id });
+        statusMap.set(uid, { status: 'LUNAS', paymentId: pp.payment.id, transferAmount: amountPerPeriod });
+        totalNominalMasuk += amountPerPeriod;
       } else if (pp.payment.status === 'PENDING' && cur?.status !== 'LUNAS') {
-        statusMap.set(uid, { status: 'PENDING', paymentId: pp.payment.id });
+        statusMap.set(uid, { status: 'PENDING', paymentId: pp.payment.id, transferAmount: amountPerPeriod });
+        totalNominalPending += amountPerPeriod;
       }
     }
 
     const residents: IplResidentStatus[] = users.map((u) => {
       const e = statusMap.get(u.id);
-      return { userId: u.id, name: u.name, unitNumber: u.unitNumber, status: e?.status ?? 'BELUM', paymentId: e?.paymentId };
+      return {
+        userId: u.id,
+        name: u.name,
+        unitNumber: u.unitNumber,
+        status: e?.status ?? 'BELUM',
+        paymentId: e?.paymentId,
+        transferAmount: e?.transferAmount ?? 0,
+      };
     });
 
     const lunas = residents.filter((r) => r.status === 'LUNAS').length;
@@ -113,7 +144,14 @@ export class ReportService {
       month, year, period, paymentTypeName: iplType.name,
       fixedAmount: iplType.fixedAmount ? iplType.fixedAmount.toNumber() : null,
       residents,
-      summary: { total: residents.length, lunas, pending, belumBayar: residents.length - lunas - pending },
+      summary: {
+        total: residents.length,
+        lunas,
+        pending,
+        belumBayar: residents.length - lunas - pending,
+        totalNominalMasuk: round2(totalNominalMasuk),
+        totalNominalPending: round2(totalNominalPending),
+      },
     };
   }
 

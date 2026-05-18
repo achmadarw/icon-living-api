@@ -58,6 +58,16 @@ export class TransactionController {
       next(err);
     }
   }
+
+  async getIplPeriodFlow(req: Request, res: Response, next: NextFunction) {
+    try {
+      const year = Number(req.query.year) || new Date().getFullYear();
+      const flow = await transactionService.getIplPeriodFlow(year);
+      sendSuccess(res, flow);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const transactionController = new TransactionController();

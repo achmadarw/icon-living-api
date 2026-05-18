@@ -21,6 +21,7 @@ router.use(authenticate);
 router.get('/balance', (req, res, next) => transactionController.getBalance(req, res, next));
 router.get('/summary', (req, res, next) => transactionController.getSummary(req, res, next));
 router.get('/cash-flow', (req, res, next) => transactionController.getCashFlow(req, res, next));
+router.get('/ipl-period-flow', (req, res, next) => transactionController.getIplPeriodFlow(req, res, next));
 router.get('/dashboard', (req, res, next) => transactionController.getDashboard(req, res, next));
 
 // Transaction list — accessible by all authenticated roles
