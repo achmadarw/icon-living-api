@@ -147,17 +147,25 @@ export class AuthService {
     });
 
     logger.debug('Step 5: Rotating refresh token in database');
-    
-    await prisma.$transaction([
-      prisma.refreshToken.delete({ where: { id: storedToken.id } }),
-      prisma.refreshToken.create({
+
+    await prisma.$transaction(async (tx) => {
+      const deleted = await tx.refreshToken.deleteMany({
+        where: { id: storedToken.id },
+      });
+
+      // Another concurrent refresh may have already rotated this token.
+      if (deleted.count === 0) {
+        throw new UnauthorizedError('Refresh token tidak valid atau sudah kadaluarsa');
+      }
+
+      await tx.refreshToken.create({
         data: {
           token: newRefreshToken,
           userId: user.id,
           expiresAt: new Date(Date.now() + AUTH.REFRESH_TOKEN_EXPIRES_IN_MS),
         },
-      }),
-    ]);
+      });
+    });
 
     logger.debug('Refresh token rotated successfully');
 
