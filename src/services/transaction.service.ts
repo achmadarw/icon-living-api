@@ -40,6 +40,16 @@ export class TransactionService {
         skip,
         take: limit,
         orderBy: { [sortBy]: sortOrder },
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          description: true,
+          balanceAfter: true,
+          referenceId: true,
+          referenceType: true,
+          createdAt: true,
+        },
       }),
       prisma.transaction.count({ where }),
     ]);
