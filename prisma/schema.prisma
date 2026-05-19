@@ -380,6 +380,7 @@ model Expense {
 
 model Transaction {
   id            String          @id @default(cuid())
+  ledgerOrder   BigInt          @default(autoincrement()) @unique
   type          TransactionType
   amount        Decimal         @db.Decimal(15, 2)
   description   String
@@ -394,6 +395,7 @@ model Transaction {
   createdAt DateTime @default(now())
 
   @@index([type])
+  @@index([ledgerOrder])
   @@index([createdAt])
   @@index([referenceType, referenceId])
   @@map("transactions")

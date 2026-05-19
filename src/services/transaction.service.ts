@@ -19,6 +19,12 @@ interface IplPeriodFlowItem {
   payerCount: number;
 }
 
+interface CreateOtherIncomeInput {
+  amount: number;
+  description: string;
+  receivedAt?: Date;
+}
+
 export class TransactionService {
   async findAll(query: TransactionQuery) {
     const { page = 1, limit = 20, type, search, sortBy = 'createdAt', sortOrder = 'desc' } = query;
@@ -42,9 +48,17 @@ export class TransactionService {
   }
 
   async getBalance() {
-    const lastTx = await prisma.transaction.findFirst({
-      orderBy: { createdAt: 'desc' },
-    });
+    let lastTx = null as Awaited<ReturnType<typeof prisma.transaction.findFirst>>;
+    try {
+      lastTx = await prisma.transaction.findFirst({
+        orderBy: { ledgerOrder: 'desc' },
+      });
+    } catch {
+      // Fallback saat schema DB belum sinkron (contoh: kolom ledgerOrder belum termigrasi)
+      lastTx = await prisma.transaction.findFirst({
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      });
+    }
 
     return {
       balance: lastTx ? lastTx.balanceAfter.toNumber() : 0,
@@ -205,6 +219,35 @@ export class TransactionService {
       pendingExpenses,
       totalUsers,
     };
+  }
+
+  async createOtherIncome(input: CreateOtherIncomeInput) {
+    const receivedAt = input.receivedAt ?? new Date();
+    const currentBalance = (await this.getBalance()).balance;
+    const afterBalance = Number((currentBalance + input.amount).toFixed(2));
+
+    return prisma.transaction.create({
+      data: {
+        type: 'INCOME',
+        amount: input.amount,
+        description: input.description,
+        balanceBefore: currentBalance,
+        balanceAfter: afterBalance,
+        referenceType: 'OTHER_INCOME',
+        createdAt: receivedAt,
+      },
+      select: {
+        id: true,
+        type: true,
+        amount: true,
+        description: true,
+        balanceBefore: true,
+        balanceAfter: true,
+        referenceId: true,
+        referenceType: true,
+        createdAt: true,
+      },
+    });
   }
 }
 

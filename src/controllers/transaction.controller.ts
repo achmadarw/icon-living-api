@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { transactionService } from '../services/transaction.service';
 import { sendSuccess } from '../utils/response';
 import { buildPaginationMeta } from '../utils/response';
+import { sendCreated } from '../utils/response';
 
 export class TransactionController {
   async findAll(req: Request, res: Response, next: NextFunction) {
@@ -64,6 +65,23 @@ export class TransactionController {
       const year = Number(req.query.year) || new Date().getFullYear();
       const flow = await transactionService.getIplPeriodFlow(year);
       sendSuccess(res, flow);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async createOtherIncome(req: Request, res: Response, next: NextFunction) {
+    try {
+      const amount = Number(req.body.amount);
+      const description = String(req.body.description ?? '').trim();
+      const receivedAt = req.body.receivedAt ? new Date(req.body.receivedAt as string) : undefined;
+
+      const created = await transactionService.createOtherIncome({
+        amount,
+        description,
+        receivedAt,
+      });
+      sendCreated(res, created);
     } catch (err) {
       next(err);
     }

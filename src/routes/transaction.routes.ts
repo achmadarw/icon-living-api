@@ -13,6 +13,12 @@ const transactionQuerySchema = paginationSchema.extend({
   sortOrder: z.enum(['asc', 'desc']).optional(),
 });
 
+const createOtherIncomeSchema = z.object({
+  amount: z.number().positive(),
+  description: z.string().trim().min(3).max(255),
+  receivedAt: z.string().datetime().optional(),
+});
+
 const router: RouterType = Router();
 
 router.use(authenticate);
@@ -26,5 +32,11 @@ router.get('/dashboard', (req, res, next) => transactionController.getDashboard(
 
 // Transaction list — accessible by all authenticated roles
 router.get('/', validate(transactionQuerySchema, 'query'), (req, res, next) => transactionController.findAll(req, res, next));
+router.post(
+  '/other-income',
+  authorize('KETUA', 'BENDAHARA'),
+  validate(createOtherIncomeSchema),
+  (req, res, next) => transactionController.createOtherIncome(req, res, next),
+);
 
 export default router;
