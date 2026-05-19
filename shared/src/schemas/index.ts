@@ -39,6 +39,7 @@ export type { CreatePaymentTypeInput, UpdatePaymentTypeInput } from './payment-t
 
 export {
   createPaymentSchema,
+  createManualPaymentSchema,
   reviewPaymentSchema,
   rejectPaymentSchema,
   paymentQuerySchema,
@@ -46,6 +47,7 @@ export {
 } from './payment.schema';
 export type {
   CreatePaymentInput,
+  CreateManualPaymentInput,
   ReviewPaymentInput,
   RejectPaymentInput,
   PaymentQuery,

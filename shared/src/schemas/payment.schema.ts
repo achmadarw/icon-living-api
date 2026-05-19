@@ -16,6 +16,20 @@ export const createPaymentSchema = z.object({
     .max(12, 'Maksimal 12 periode sekaligus'),
 });
 
+export const createManualPaymentSchema = z.object({
+  userId: z.string().min(1, 'User wajib dipilih'),
+  paymentTypeId: z.string().min(1, 'Jenis pembayaran wajib dipilih'),
+  amount: z.number().positive('Nominal harus lebih dari 0'),
+  bankName: z.string().min(1, 'Nama bank wajib diisi').max(100),
+  accountName: z.string().max(100).optional(),
+  transferDate: z.string().min(1, 'Tanggal transfer wajib diisi'),
+  description: z.string().max(500).optional(),
+  periods: z
+    .array(z.string().regex(PERIOD_REGEX, 'Format periode: YYYY-MM'))
+    .min(1, 'Minimal 1 periode harus dipilih')
+    .max(12, 'Maksimal 12 periode sekaligus'),
+});
+
 export const reviewPaymentSchema = z.object({
   note: z.string().max(500).optional(),
 });
@@ -41,6 +55,7 @@ export const arrearsQuerySchema = z.object({
 });
 
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
+export type CreateManualPaymentInput = z.infer<typeof createManualPaymentSchema>;
 export type ReviewPaymentInput = z.infer<typeof reviewPaymentSchema>;
 export type RejectPaymentInput = z.infer<typeof rejectPaymentSchema>;
 export type PaymentQuery = z.infer<typeof paymentQuerySchema>;

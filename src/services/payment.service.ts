@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, InvalidStatusError, AppError } from '../utils/errors';
 import { notificationService } from './notification.service';
-import type { CreatePaymentInput, PaymentQuery, ArrearsQuery } from '@tia/shared';
+import type { CreatePaymentInput, CreateManualPaymentInput, PaymentQuery, ArrearsQuery } from '@tia/shared';
 
 export class PaymentService {
   async create(userId: string, input: CreatePaymentInput) {
@@ -109,6 +109,104 @@ export class PaymentService {
     ]);
 
     return { payments, total };
+  }
+
+  async createManualApproved(reviewerId: string, input: CreateManualPaymentInput) {
+    const paymentType = await prisma.paymentType.findUnique({
+      where: { id: input.paymentTypeId },
+    });
+    if (!paymentType || !paymentType.isActive) {
+      throw new NotFoundError('Jenis pembayaran');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: input.userId },
+      select: { id: true, isActive: true },
+    });
+    if (!user || !user.isActive) {
+      throw new NotFoundError('Warga');
+    }
+
+    const existingPeriods = await prisma.paymentPeriod.findMany({
+      where: {
+        period: { in: input.periods },
+        payment: {
+          userId: input.userId,
+          paymentTypeId: input.paymentTypeId,
+          status: { in: ['PENDING', 'APPROVED'] },
+        },
+      },
+      select: { period: true },
+    });
+    if (existingPeriods.length > 0) {
+      const dupes = existingPeriods.map((p) => p.period);
+      throw new AppError(409, 'DUPLICATE', `Periode ${dupes.join(', ')} sudah pernah dibayar atau sedang diproses`);
+    }
+
+    const expectedAmount = paymentType.fixedAmount
+      ? paymentType.fixedAmount.toNumber() * input.periods.length
+      : null;
+    if (expectedAmount !== null && input.amount !== expectedAmount) {
+      throw new AppError(400, 'VALIDATION_ERROR', `Nominal harus ${expectedAmount} untuk ${input.periods.length} periode`);
+    }
+
+    const transferDate = new Date(input.transferDate);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          amount: input.amount,
+          bankName: input.bankName,
+          accountName: input.accountName,
+          transferDate,
+          proofImageUrl: 'manual://prelaunch-entry',
+          description: input.description ?? 'Pencatatan manual pre-launch',
+          userId: input.userId,
+          paymentTypeId: input.paymentTypeId,
+          status: 'APPROVED',
+          reviewedById: reviewerId,
+          reviewedAt: new Date(),
+          reviewNote: 'Disetujui otomatis: input manual pengurus',
+          periods: {
+            create: input.periods.map((period) => ({ period })),
+          },
+        },
+        include: {
+          periods: true,
+          paymentType: true,
+          user: { select: { id: true, name: true, unitNumber: true } },
+        },
+      });
+
+      const lastTx = await tx.transaction.findFirst({
+        orderBy: [{ ledgerOrder: 'desc' }, { createdAt: 'desc' }],
+      });
+      let currentBalance = lastTx ? lastTx.balanceAfter.toNumber() : 0;
+      const amountPerPeriod = payment.amount.toNumber() / payment.periods.length;
+
+      for (const period of payment.periods) {
+        const balanceBefore = currentBalance;
+        const balanceAfter = currentBalance + amountPerPeriod;
+
+        await tx.transaction.create({
+          data: {
+            type: 'INCOME',
+            amount: amountPerPeriod,
+            description: `Pembayaran ${payment.paymentType.name} periode ${period.period} (manual)`,
+            balanceBefore,
+            balanceAfter,
+            referenceId: payment.id,
+            referenceType: 'PAYMENT',
+            createdAt: transferDate,
+          },
+        });
+        currentBalance = balanceAfter;
+      }
+
+      return payment;
+    });
+
+    return created;
   }
 
   async findById(id: string) {

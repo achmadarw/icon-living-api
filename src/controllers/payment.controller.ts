@@ -26,6 +26,15 @@ export class PaymentController {
     }
   }
 
+  async createManual(req: Request, res: Response, next: NextFunction) {
+    try {
+      const payment = await paymentService.createManualApproved(req.user!.userId, req.body);
+      sendCreated(res, payment);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async findAll(req: Request, res: Response, next: NextFunction) {
     try {
       const { payments, total } = await paymentService.findAll(req.query as any);

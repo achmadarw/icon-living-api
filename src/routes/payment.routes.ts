@@ -4,7 +4,7 @@ import { validate } from '../middleware/validate';
 import { authenticate } from '../middleware/authenticate';
 import { authorize } from '../middleware/authorize';
 import {
-  createPaymentSchema, reviewPaymentSchema, rejectPaymentSchema,
+  createPaymentSchema, createManualPaymentSchema, reviewPaymentSchema, rejectPaymentSchema,
   paymentQuerySchema, arrearsQuerySchema, idParamSchema,
 } from '@tia/shared';
 
@@ -14,6 +14,7 @@ router.use(authenticate);
 
 // Warga: own payments
 router.post('/', validate(createPaymentSchema), (req, res, next) => paymentController.create(req, res, next));
+router.post('/manual', authorize('KETUA', 'BENDAHARA'), validate(createManualPaymentSchema), (req, res, next) => paymentController.createManual(req, res, next));
 router.get('/mine', validate(paymentQuerySchema, 'query'), (req, res, next) => paymentController.findMine(req, res, next));
 
 // Arrears: all authenticated users can check
