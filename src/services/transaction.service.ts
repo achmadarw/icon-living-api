@@ -45,6 +45,7 @@ export class TransactionService {
           type: true,
           amount: true,
           description: true,
+          balanceBefore: true,
           balanceAfter: true,
           referenceId: true,
           referenceType: true,
