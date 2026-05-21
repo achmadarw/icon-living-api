@@ -88,7 +88,11 @@ export class PaymentController {
 
   async getArrears(req: Request, res: Response, next: NextFunction) {
     try {
-      const arrears = await paymentService.getArrears(req.query as any);
+      const query = req.query as any;
+      if (!query.userId) {
+        query.userId = req.user!.userId;
+      }
+      const arrears = await paymentService.getArrears(query);
       sendSuccess(res, arrears);
     } catch (err) {
       next(err);

@@ -1,10 +1,55 @@
-import { Prisma } from '@prisma/client';
+﻿import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, InvalidStatusError, AppError } from '../utils/errors';
 import { notificationService } from './notification.service';
 import type { CreatePaymentInput, CreateManualPaymentInput, PaymentQuery, ArrearsQuery } from '@tia/shared';
 
 export class PaymentService {
+  private async resolveArrearsPaymentTypeId(
+    requestedPaymentTypeId: string,
+    months: string[],
+  ): Promise<string> {
+    const approvedPayments = await prisma.payment.findMany({
+      where: {
+        status: 'APPROVED',
+        periods: { some: { period: { in: months } } },
+        paymentType: {
+          isActive: true,
+          OR: [
+            { isMandatory: true },
+            { name: { contains: 'IPL', mode: 'insensitive' } },
+          ],
+        },
+      },
+      select: { paymentTypeId: true },
+    });
+
+    if (approvedPayments.length === 0) {
+      return requestedPaymentTypeId;
+    }
+
+    const counts: Record<string, number> = {};
+    for (const p of approvedPayments) {
+      counts[p.paymentTypeId] = (counts[p.paymentTypeId] ?? 0) + 1;
+    }
+
+    const requestedCount = counts[requestedPaymentTypeId] ?? 0;
+    if (requestedCount > 0) {
+      return requestedPaymentTypeId;
+    }
+
+    let fallbackId = requestedPaymentTypeId;
+    let maxCount = -1;
+    Object.entries(counts).forEach(([id, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        fallbackId = id;
+      }
+    });
+
+    return fallbackId;
+  }
+
   async create(userId: string, input: CreatePaymentInput) {
     const paymentType = await prisma.paymentType.findUnique({
       where: { id: input.paymentTypeId },
@@ -345,12 +390,17 @@ export class PaymentService {
       select: { id: true, name: true, unitNumber: true },
     });
 
+    const resolvedPaymentTypeId = await this.resolveArrearsPaymentTypeId(
+      paymentTypeId,
+      allMonths,
+    );
+
     // Find all approved payments for this type+year
     const approvedPeriods = await prisma.paymentPeriod.findMany({
       where: {
         period: { in: allMonths },
         payment: {
-          paymentTypeId,
+          paymentTypeId: resolvedPaymentTypeId,
           status: 'APPROVED',
           ...(userId ? { userId } : {}),
         },
@@ -366,7 +416,7 @@ export class PaymentService {
       where: {
         period: { in: allMonths },
         payment: {
-          paymentTypeId,
+          paymentTypeId: resolvedPaymentTypeId,
           status: 'PENDING',
           ...(userId ? { userId } : {}),
         },
@@ -415,3 +465,4 @@ export class PaymentService {
 }
 
 export const paymentService = new PaymentService();
+
