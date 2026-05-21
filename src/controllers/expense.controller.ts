@@ -64,6 +64,24 @@ export class ExpenseController {
       next(err);
     }
   }
+
+  async update(req: Request, res: Response, next: NextFunction) {
+    try {
+      const expense = await expenseService.update(req.params.id, req.body);
+      sendSuccess(res, expense);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async delete(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await expenseService.delete(req.params.id);
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const expenseController = new ExpenseController();

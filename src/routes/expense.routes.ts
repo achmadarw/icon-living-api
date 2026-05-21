@@ -4,7 +4,7 @@ import { validate } from '../middleware/validate';
 import { authenticate } from '../middleware/authenticate';
 import { authorize } from '../middleware/authorize';
 import {
-  createExpenseSchema, approveExpenseSchema, rejectExpenseSchema,
+  createExpenseSchema, updateExpenseSchema, approveExpenseSchema, rejectExpenseSchema,
   expenseQuerySchema, idParamSchema,
 } from '@tia/shared';
 
@@ -15,6 +15,8 @@ router.use(authenticate);
 router.post('/', authorize('KETUA', 'BENDAHARA'), validate(createExpenseSchema), (req, res, next) => expenseController.create(req, res, next));
 router.get('/', authorize('KETUA', 'BENDAHARA'), validate(expenseQuerySchema, 'query'), (req, res, next) => expenseController.findAll(req, res, next));
 router.get('/:id', authorize('KETUA', 'BENDAHARA'), validate(idParamSchema, 'params'), (req, res, next) => expenseController.findById(req, res, next));
+router.patch('/:id', authorize('BENDAHARA'), validate(idParamSchema, 'params'), validate(updateExpenseSchema), (req, res, next) => expenseController.update(req, res, next));
+router.delete('/:id', authorize('BENDAHARA'), validate(idParamSchema, 'params'), (req, res, next) => expenseController.delete(req, res, next));
 router.patch('/:id/approve', authorize('KETUA'), validate(idParamSchema, 'params'), validate(approveExpenseSchema), (req, res, next) => expenseController.approve(req, res, next));
 router.patch('/:id/reject', authorize('KETUA'), validate(idParamSchema, 'params'), validate(rejectExpenseSchema), (req, res, next) => expenseController.reject(req, res, next));
 

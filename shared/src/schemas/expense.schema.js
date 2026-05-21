@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.expenseQuerySchema = exports.rejectExpenseSchema = exports.approveExpenseSchema = exports.createExpenseSchema = void 0;
+exports.expenseQuerySchema = exports.rejectExpenseSchema = exports.updateExpenseSchema = exports.approveExpenseSchema = exports.createExpenseSchema = void 0;
 const zod_1 = require("zod");
 exports.createExpenseSchema = zod_1.z.object({
     categoryId: zod_1.z.string().min(1, 'Kategori pengeluaran wajib dipilih'),
@@ -16,6 +16,18 @@ exports.createExpenseSchema = zod_1.z.object({
 });
 exports.approveExpenseSchema = zod_1.z.object({
     note: zod_1.z.string().max(500).optional(),
+});
+exports.updateExpenseSchema = zod_1.z.object({
+    categoryId: zod_1.z.string().min(1, 'Kategori pengeluaran wajib dipilih'),
+    amount: zod_1.z.number().positive('Nominal harus lebih dari 0'),
+    description: zod_1.z.string().min(10, 'Deskripsi minimal 10 karakter').max(1000),
+    expenseDate: zod_1.z.string()
+        .min(1, 'Tanggal pengeluaran wajib diisi')
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD'),
+    paymentMethod: zod_1.z.string().max(100).optional(),
+    recipient: zod_1.z.string().max(150).optional(),
+    referenceNumber: zod_1.z.string().max(100).optional(),
+    attachmentUrl: zod_1.z.string().url('URL lampiran tidak valid').optional(),
 });
 exports.rejectExpenseSchema = zod_1.z.object({
     note: zod_1.z.string().min(1, 'Alasan penolakan wajib diisi').max(500),

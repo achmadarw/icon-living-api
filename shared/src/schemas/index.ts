@@ -62,12 +62,14 @@ export type {
 
 export {
   createExpenseSchema,
+  updateExpenseSchema,
   approveExpenseSchema,
   rejectExpenseSchema,
   expenseQuerySchema,
 } from './expense.schema';
 export type {
   CreateExpenseInput,
+  UpdateExpenseInput,
   ApproveExpenseInput,
   RejectExpenseInput,
   ExpenseQuery,

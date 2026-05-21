@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, InvalidStatusError, InsufficientBalanceError } from '../utils/errors';
 import { notificationService } from './notification.service';
-import type { CreateExpenseInput, ExpenseQuery } from '@tia/shared';
+import type { CreateExpenseInput, UpdateExpenseInput, ExpenseQuery } from '@tia/shared';
 
 export class ExpenseService {
   async create(requestedById: string, input: CreateExpenseInput) {
@@ -253,6 +253,53 @@ export class ExpenseService {
     }).catch(() => {});
 
     return updated;
+  }
+
+  async update(id: string, input: UpdateExpenseInput) {
+    const expense = await this.findById(id);
+
+    if (expense.status === 'APPROVED') {
+      throw new InvalidStatusError(expense.status, 'SUBMITTED/REJECTED/DRAFT');
+    }
+
+    const category = await prisma.expenseCategory.findUnique({
+      where: { id: input.categoryId },
+    });
+    if (!category || !category.isActive) {
+      throw new NotFoundError('Kategori pengeluaran');
+    }
+
+    const updated = await prisma.expense.update({
+      where: { id },
+      data: {
+        categoryId: input.categoryId,
+        amount: input.amount,
+        description: input.description,
+        expenseDate: new Date(input.expenseDate),
+        paymentMethod: input.paymentMethod,
+        recipient: input.recipient,
+        referenceNumber: input.referenceNumber,
+        attachmentUrl: input.attachmentUrl,
+      },
+      include: {
+        category: { select: { id: true, name: true } },
+        requestedBy: { select: { id: true, name: true } },
+        approvedBy: { select: { id: true, name: true } },
+      },
+    });
+
+    return updated;
+  }
+
+  async delete(id: string) {
+    const expense = await this.findById(id);
+
+    if (expense.status === 'APPROVED') {
+      throw new InvalidStatusError(expense.status, 'SUBMITTED/REJECTED/DRAFT');
+    }
+
+    await prisma.expense.delete({ where: { id } });
+    return { id };
   }
 }
 
