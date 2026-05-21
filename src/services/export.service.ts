@@ -56,9 +56,17 @@ const MONTHS_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli
 
 // ─── PDF Helper ─────────────────────────────────────────
 
-function generatePdfBuffer(buildFn: (doc: any) => void): Promise<Buffer> {
+function generatePdfBuffer(
+  buildFn: (doc: any) => void,
+  options: { size?: string; margin?: number; layout?: 'portrait' | 'landscape' } = {},
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
+    const doc = new PDFDocument({
+      size: options.size ?? 'A4',
+      margin: options.margin ?? 40,
+      layout: options.layout ?? 'portrait',
+      bufferPages: true,
+    });
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -212,52 +220,86 @@ class ExpensePdfStrategy implements ExpenseExportStrategy {
   async generate(data: ExpenseReportData): Promise<Buffer> {
     return generatePdfBuffer((doc) => {
       const periodLabel = data.month ? `${MONTHS_ID[data.month - 1]} ${data.year}` : `Tahun ${data.year}`;
-      doc.fontSize(16).text(`Laporan Pengeluaran — ${periodLabel}`, { align: 'center' });
+      doc.fontSize(16).text(`Laporan Pengeluaran - ${periodLabel}`, { align: 'center' });
       if (data.categoryFilter) { doc.moveDown(0.3); doc.fontSize(10).text(`Filter: ${data.categoryFilter}`, { align: 'center' }); }
       doc.moveDown(0.3);
       doc.fontSize(10).text(`Total: Rp ${formatCurrencyPlain(data.summary.totalAmount)} | Auto: ${data.summary.autoApprovedCount} | Manual: ${data.summary.manualApprovedCount}`, { align: 'center' });
       doc.moveDown(1);
 
-      const startX = 40;
-      const cols = [20, 48, 58, 44, 44, 48, 52, 100, 44, 30];
+      const startX = doc.page.margins.left;
+      const cols = [24, 64, 92, 72, 78, 86, 90, 190, 74, 44];
       let y = doc.y;
       const hdrs = ['No', 'Tgl', 'Pengaju', 'Kategori', 'Metode', 'Penerima', 'No Ref', 'Deskripsi', 'Nominal', 'Auto'];
+      const tableWidth = cols.reduce((a, b) => a + b, 0);
+      const cellPaddingX = 3;
+      const cellPaddingY = 3;
+      const lineGap = 1;
 
-      doc.fontSize(8).font('Helvetica-Bold');
-      let cx = startX;
-      for (let i = 0; i < hdrs.length; i++) { doc.text(hdrs[i], cx, y, { width: cols[i] }); cx += cols[i]; }
-      y += 16;
-      doc.moveTo(startX, y).lineTo(startX + cols.reduce((a, b) => a + b, 0), y).stroke();
-      y += 4;
+      const drawHeader = () => {
+        doc.fontSize(8).font('Helvetica-Bold');
+        let hx = startX;
+        for (let i = 0; i < hdrs.length; i++) {
+          doc.text(hdrs[i], hx + cellPaddingX, y, { width: cols[i] - cellPaddingX * 2, lineBreak: false });
+          hx += cols[i];
+        }
+        y += 14;
+        doc.moveTo(startX, y).lineTo(startX + tableWidth, y).stroke();
+        y += 4;
+        doc.font('Helvetica').fontSize(8);
+      };
 
-      doc.font('Helvetica').fontSize(8);
+      drawHeader();
+
       for (let i = 0; i < data.items.length; i++) {
-        if (y > 750) { doc.addPage(); y = 40; }
         const item = data.items[i];
-        cx = startX;
         const vals = [
           String(i + 1),
           formatDatePlain(item.expenseDate ?? item.date),
-          truncateText(item.requesterName, 16),
-          truncateText(item.categoryName, 12),
-          truncateText(item.paymentMethod ?? '-', 12),
-          truncateText(item.recipient ?? '-', 14),
-          truncateText(item.referenceNumber ?? '-', 14),
-          truncateText(item.description, 60),
+          truncateText(item.requesterName, 36),
+          truncateText(item.categoryName, 24),
+          truncateText(item.paymentMethod ?? '-', 24),
+          truncateText(item.recipient ?? '-', 26),
+          truncateText(item.referenceNumber ?? '-', 28),
+          item.description.replace(/\s+/g, ' ').trim(),
           `Rp ${formatCurrencyPlain(item.amount)}`,
           item.isAutoApproved ? 'Ya' : '-',
         ];
-        for (let j = 0; j < vals.length; j++) { doc.text(vals[j], cx, y, { width: cols[j] }); cx += cols[j]; }
-        y += 13;
+
+        const textHeights = vals.map((value, colIndex) => {
+          const textWidth = cols[colIndex] - cellPaddingX * 2;
+          if (colIndex === 7) {
+            const rawHeight = doc.heightOfString(value, { width: textWidth, lineGap });
+            return Math.min(rawHeight, 9 * 3);
+          }
+          return 9;
+        });
+        const rowHeight = Math.max(...textHeights) + cellPaddingY * 2;
+
+        if (y + rowHeight > doc.page.height - doc.page.margins.bottom - 20) {
+          doc.addPage();
+          y = doc.page.margins.top;
+          drawHeader();
+        }
+
+        let cx = startX;
+        for (let j = 0; j < vals.length; j++) {
+          const textWidth = cols[j] - cellPaddingX * 2;
+          const options = j === 7
+            ? { width: textWidth, height: rowHeight - cellPaddingY * 2, ellipsis: true, lineGap }
+            : { width: textWidth, lineBreak: false };
+          doc.text(vals[j], cx + cellPaddingX, y + cellPaddingY, options as any);
+          cx += cols[j];
+        }
+
+        y += rowHeight;
       }
 
       y += 8;
       doc.font('Helvetica-Bold').fontSize(9);
       doc.text(`Total Pengeluaran: Rp ${formatCurrencyPlain(data.summary.totalAmount)}`, startX, y);
-    });
+    }, { layout: 'landscape', margin: 28, size: 'A4' });
   }
 }
-
 // ─── Export Service Facade ───────────────────────────────
 
 export class ExportService {
@@ -278,3 +320,4 @@ export const exportService = new ExportService();
 
 // Re-export for testing
 export { IplCsvStrategy, IplPdfStrategy, IncomeCsvStrategy, IncomePdfStrategy, ExpenseCsvStrategy, ExpensePdfStrategy, buildCsv, escapeCsv };
+
