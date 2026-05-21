@@ -351,6 +351,10 @@ model Expense {
   id            String        @id @default(cuid())
   amount        Decimal       @db.Decimal(15, 2)
   description   String
+  expenseDate   DateTime?
+  paymentMethod String?
+  recipient     String?
+  referenceNumber String?
   attachmentUrl String?
   status        ExpenseStatus @default(DRAFT)
   approvalNote  String?

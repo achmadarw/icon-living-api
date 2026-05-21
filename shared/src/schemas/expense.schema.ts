@@ -4,6 +4,12 @@ export const createExpenseSchema = z.object({
   categoryId: z.string().min(1, 'Kategori pengeluaran wajib dipilih'),
   amount: z.number().positive('Nominal harus lebih dari 0'),
   description: z.string().min(10, 'Deskripsi minimal 10 karakter').max(1000),
+  expenseDate: z.string()
+    .min(1, 'Tanggal pengeluaran wajib diisi')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD'),
+  paymentMethod: z.string().max(100).optional(),
+  recipient: z.string().max(150).optional(),
+  referenceNumber: z.string().max(100).optional(),
   attachmentUrl: z.string().url('URL lampiran tidak valid').optional(),
 });
 

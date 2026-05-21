@@ -46,9 +46,13 @@ export interface IncomeReportData {
 export interface ExpenseReportItem {
   id: string;
   date: Date;
+  expenseDate: Date | null;
   requesterName: string;
   categoryName: string;
   description: string;
+  paymentMethod: string | null;
+  recipient: string | null;
+  referenceNumber: string | null;
   amount: number;
   status: string;
   isAutoApproved: boolean;
@@ -209,7 +213,15 @@ export class ReportService {
 
     const where: Prisma.ExpenseWhereInput = {
       status: 'APPROVED',
-      approvedAt: { gte: startDate, lt: endDate },
+      OR: [
+        { expenseDate: { gte: startDate, lt: endDate } },
+        {
+          AND: [
+            { expenseDate: null },
+            { approvedAt: { gte: startDate, lt: endDate } },
+          ],
+        },
+      ],
     };
     if (categoryId) where.categoryId = categoryId;
 
@@ -219,7 +231,7 @@ export class ReportService {
         requestedBy: { select: { name: true } },
         category: { select: { name: true, requiresApproval: true } },
       },
-      orderBy: { approvedAt: 'asc' },
+      orderBy: [{ expenseDate: 'asc' }, { approvedAt: 'asc' }],
     });
 
     let categoryFilter: string | undefined;
@@ -229,9 +241,13 @@ export class ReportService {
     }
 
     const items: ExpenseReportItem[] = expenses.map((e) => ({
-      id: e.id, date: e.approvedAt ?? e.createdAt,
+      id: e.id, date: e.expenseDate ?? e.approvedAt ?? e.createdAt,
+      expenseDate: e.expenseDate,
       requesterName: e.requestedBy.name, categoryName: e.category.name,
       description: e.description, amount: e.amount.toNumber(),
+      paymentMethod: e.paymentMethod,
+      recipient: e.recipient,
+      referenceNumber: e.referenceNumber,
       status: e.status, isAutoApproved: !e.category.requiresApproval,
     }));
 

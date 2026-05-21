@@ -30,6 +30,10 @@ export class ExpenseService {
       data: {
         amount: input.amount,
         description: input.description,
+        expenseDate: input.expenseDate ? new Date(input.expenseDate) : undefined,
+        paymentMethod: input.paymentMethod,
+        recipient: input.recipient,
+        referenceNumber: input.referenceNumber,
         attachmentUrl: input.attachmentUrl,
         categoryId: input.categoryId,
         requestedById,
@@ -63,6 +67,8 @@ export class ExpenseService {
         throw new InsufficientBalanceError();
       }
 
+      const businessDate = input.expenseDate ? new Date(input.expenseDate) : new Date();
+
       const transaction = await tx.transaction.create({
         data: {
           type: 'EXPENSE',
@@ -71,6 +77,7 @@ export class ExpenseService {
           balanceBefore: currentBalance,
           balanceAfter: currentBalance - input.amount,
           referenceType: 'EXPENSE',
+          createdAt: businessDate,
         },
       });
 
@@ -78,11 +85,15 @@ export class ExpenseService {
         data: {
           amount: input.amount,
           description: input.description,
+          expenseDate: input.expenseDate ? new Date(input.expenseDate) : undefined,
+          paymentMethod: input.paymentMethod,
+          recipient: input.recipient,
+          referenceNumber: input.referenceNumber,
           attachmentUrl: input.attachmentUrl,
           categoryId: input.categoryId,
           requestedById,
           status: 'APPROVED',
-          approvedAt: new Date(),
+          approvedAt: businessDate,
           transactionId: transaction.id,
         },
         include: {
@@ -167,6 +178,8 @@ export class ExpenseService {
         throw new InsufficientBalanceError();
       }
 
+      const businessDate = expense.expenseDate ?? new Date();
+
       const transaction = await tx.transaction.create({
         data: {
           type: 'EXPENSE',
@@ -176,6 +189,7 @@ export class ExpenseService {
           balanceAfter: currentBalance - expense.amount.toNumber(),
           referenceId: expense.id,
           referenceType: 'EXPENSE',
+          createdAt: businessDate,
         },
       });
 
@@ -185,7 +199,7 @@ export class ExpenseService {
           status: 'APPROVED',
           approvedById: approverId,
           approvalNote: note,
-          approvedAt: new Date(),
+          approvedAt: businessDate,
           transactionId: transaction.id,
         },
         include: {

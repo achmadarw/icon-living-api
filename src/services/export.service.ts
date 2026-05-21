@@ -47,6 +47,11 @@ function formatDatePlain(date: Date): string {
   return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(date));
 }
 
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
 const MONTHS_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
 // ─── PDF Helper ─────────────────────────────────────────
@@ -187,12 +192,13 @@ class ExpenseCsvStrategy implements ExpenseExportStrategy {
   fileExtension = 'csv';
 
   generate(data: ExpenseReportData): Buffer {
-    const headers = ['No', 'Tanggal', 'Pengaju', 'Kategori', 'Deskripsi', 'Nominal', 'Auto-Approve'];
+    const headers = ['No', 'Tanggal', 'Pengaju', 'Kategori', 'Metode Bayar', 'Penerima', 'No Bukti/Ref', 'Deskripsi', 'Nominal', 'Auto-Approve'];
     const rows = data.items.map((item, i) => [
-      i + 1, formatDatePlain(item.date), item.requesterName, item.categoryName,
+      i + 1, formatDatePlain(item.expenseDate ?? item.date), item.requesterName, item.categoryName,
+      item.paymentMethod ?? '-', item.recipient ?? '-', item.referenceNumber ?? '-',
       item.description, item.amount, item.isAutoApproved ? 'Ya' : 'Tidak',
     ]);
-    rows.push(['', '', '', '', 'TOTAL', data.summary.totalAmount, '']);
+    rows.push(['', '', '', '', '', '', '', 'TOTAL', data.summary.totalAmount, '']);
     return buildCsv(headers, rows);
   }
 }
@@ -213,9 +219,9 @@ class ExpensePdfStrategy implements ExpenseExportStrategy {
       doc.moveDown(1);
 
       const startX = 40;
-      const cols = [25, 60, 85, 70, 130, 75, 50];
+      const cols = [20, 48, 58, 44, 44, 48, 52, 100, 44, 30];
       let y = doc.y;
-      const hdrs = ['No', 'Tanggal', 'Pengaju', 'Kategori', 'Deskripsi', 'Nominal', 'Auto'];
+      const hdrs = ['No', 'Tgl', 'Pengaju', 'Kategori', 'Metode', 'Penerima', 'No Ref', 'Deskripsi', 'Nominal', 'Auto'];
 
       doc.fontSize(8).font('Helvetica-Bold');
       let cx = startX;
@@ -226,12 +232,23 @@ class ExpensePdfStrategy implements ExpenseExportStrategy {
 
       doc.font('Helvetica').fontSize(8);
       for (let i = 0; i < data.items.length; i++) {
-        if (y > 760) { doc.addPage(); y = 40; }
+        if (y > 750) { doc.addPage(); y = 40; }
         const item = data.items[i];
         cx = startX;
-        const vals = [String(i + 1), formatDatePlain(item.date), item.requesterName, item.categoryName, item.description, `Rp ${formatCurrencyPlain(item.amount)}`, item.isAutoApproved ? 'Ya' : '-'];
+        const vals = [
+          String(i + 1),
+          formatDatePlain(item.expenseDate ?? item.date),
+          truncateText(item.requesterName, 16),
+          truncateText(item.categoryName, 12),
+          truncateText(item.paymentMethod ?? '-', 12),
+          truncateText(item.recipient ?? '-', 14),
+          truncateText(item.referenceNumber ?? '-', 14),
+          truncateText(item.description, 60),
+          `Rp ${formatCurrencyPlain(item.amount)}`,
+          item.isAutoApproved ? 'Ya' : '-',
+        ];
         for (let j = 0; j < vals.length; j++) { doc.text(vals[j], cx, y, { width: cols[j] }); cx += cols[j]; }
-        y += 14;
+        y += 13;
       }
 
       y += 8;
