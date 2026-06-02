@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { NotFoundError, InvalidStatusError, AppError } from '../utils/errors';
 import { notificationService } from './notification.service';
+import { acquireLedgerLock, getLastLedgerState, rebuildLedgerTailFromOrder } from './ledger.service';
 import type { CreatePaymentInput, CreateManualPaymentInput, PaymentQuery, ArrearsQuery } from '@tia/shared';
 
 export class PaymentService {
@@ -198,13 +199,16 @@ export class PaymentService {
     const transferDate = new Date(input.transferDate);
 
     const created = await prisma.$transaction(async (tx) => {
+      await acquireLedgerLock(tx);
+      const ledgerState = await getLastLedgerState(tx);
+
       const payment = await tx.payment.create({
         data: {
           amount: input.amount,
           bankName: input.bankName,
           accountName: input.accountName,
           transferDate,
-          proofImageUrl: 'manual://prelaunch-entry',
+          proofImageUrl: input.proofImageUrl ?? 'manual://prelaunch-entry',
           description: input.description ?? 'Pencatatan manual pre-launch',
           userId: input.userId,
           paymentTypeId: input.paymentTypeId,
@@ -223,17 +227,15 @@ export class PaymentService {
         },
       });
 
-      const lastTx = await tx.transaction.findFirst({
-        orderBy: [{ ledgerOrder: 'desc' }, { createdAt: 'desc' }],
-      });
-      let currentBalance = lastTx ? lastTx.balanceAfter.toNumber() : 0;
+      let currentBalance = ledgerState.balance;
       const amountPerPeriod = payment.amount.toNumber() / payment.periods.length;
+      let firstInsertedOrder: bigint | null = null;
 
       for (const period of payment.periods) {
         const balanceBefore = currentBalance;
         const balanceAfter = currentBalance + amountPerPeriod;
 
-        await tx.transaction.create({
+        const createdTx = await tx.transaction.create({
           data: {
             type: 'INCOME',
             amount: amountPerPeriod,
@@ -244,8 +246,18 @@ export class PaymentService {
             referenceType: 'PAYMENT',
             createdAt: transferDate,
           },
+          select: { ledgerOrder: true },
         });
+        if (!firstInsertedOrder) firstInsertedOrder = createdTx.ledgerOrder;
         currentBalance = balanceAfter;
+      }
+
+      if (
+        firstInsertedOrder &&
+        ledgerState.lastCreatedAt &&
+        transferDate.getTime() < ledgerState.lastCreatedAt.getTime()
+      ) {
+        await rebuildLedgerTailFromOrder(tx, firstInsertedOrder);
       }
 
       return payment;
@@ -285,18 +297,17 @@ export class PaymentService {
 
     // Create N transactions (one per period) inside a single transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Get current balance
-      const lastTx = await tx.transaction.findFirst({
-        orderBy: { createdAt: 'desc' },
-      });
-      let currentBalance = lastTx ? lastTx.balanceAfter.toNumber() : 0;
+      await acquireLedgerLock(tx);
+      const ledgerState = await getLastLedgerState(tx);
+      let currentBalance = ledgerState.balance;
       const amountPerPeriod = payment.amount.toNumber() / payment.periods.length;
+      let firstInsertedOrder: bigint | null = null;
 
       for (const period of payment.periods) {
         const balanceBefore = currentBalance;
         const balanceAfter = currentBalance + amountPerPeriod;
 
-        await tx.transaction.create({
+        const createdTx = await tx.transaction.create({
           data: {
             type: 'INCOME',
             amount: amountPerPeriod,
@@ -306,7 +317,9 @@ export class PaymentService {
             referenceId: payment.id,
             referenceType: 'PAYMENT',
           },
+          select: { ledgerOrder: true },
         });
+        if (!firstInsertedOrder) firstInsertedOrder = createdTx.ledgerOrder;
 
         currentBalance = balanceAfter;
       }
@@ -325,6 +338,14 @@ export class PaymentService {
           user: { select: { id: true, name: true, unitNumber: true } },
         },
       });
+
+      if (
+        firstInsertedOrder &&
+        ledgerState.lastCreatedAt &&
+        payment.transferDate.getTime() < ledgerState.lastCreatedAt.getTime()
+      ) {
+        await rebuildLedgerTailFromOrder(tx, firstInsertedOrder);
+      }
 
       return updated;
     });

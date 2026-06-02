@@ -10,10 +10,12 @@ export class TransactionController {
       const page = Number(req.query.page) || 1;
       const limit = Number(req.query.limit) || 20;
       const type = req.query.type as 'INCOME' | 'EXPENSE' | undefined;
+      const year = req.query.year ? Number(req.query.year) : undefined;
+      const month = req.query.month ? Number(req.query.month) : undefined;
       const search = req.query.search as string | undefined;
       const sortBy = (req.query.sortBy as 'createdAt' | 'amount') || 'createdAt';
       const sortOrder = (req.query.sortOrder as 'asc' | 'desc') || 'desc';
-      const { transactions, total } = await transactionService.findAll({ page, limit, type, search, sortBy, sortOrder });
+      const { transactions, total } = await transactionService.findAll({ page, limit, type, year, month, search, sortBy, sortOrder });
       const meta = buildPaginationMeta(page, limit, total);
       sendSuccess(res, transactions, 200, meta);
     } catch (err) {

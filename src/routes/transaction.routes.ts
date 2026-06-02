@@ -8,6 +8,8 @@ import { z } from 'zod';
 
 const transactionQuerySchema = paginationSchema.extend({
   type: z.enum(['INCOME', 'EXPENSE']).optional(),
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+  month: z.coerce.number().int().min(1).max(12).optional(),
   search: z.string().trim().optional(),
   sortBy: z.enum(['createdAt', 'amount']).optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),

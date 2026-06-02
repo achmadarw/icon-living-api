@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { NotFoundError, InvalidStatusError, InsufficientBalanceError } from '../utils/errors';
 import { notificationService } from './notification.service';
+import { acquireLedgerLock, getLastLedgerState, rebuildLedgerTailFromOrder } from './ledger.service';
 import type { CreateExpenseInput, UpdateExpenseInput, ExpenseQuery } from '@tia/shared';
 
 export class ExpenseService {
@@ -58,10 +59,9 @@ export class ExpenseService {
 
   private async createAutoApproved(requestedById: string, input: CreateExpenseInput, categoryName: string) {
     return prisma.$transaction(async (tx) => {
-      const lastTx = await tx.transaction.findFirst({
-        orderBy: { createdAt: 'desc' },
-      });
-      const currentBalance = lastTx ? lastTx.balanceAfter.toNumber() : 0;
+      await acquireLedgerLock(tx);
+      const ledgerState = await getLastLedgerState(tx);
+      const currentBalance = ledgerState.balance;
 
       if (currentBalance < input.amount) {
         throw new InsufficientBalanceError();
@@ -79,6 +79,7 @@ export class ExpenseService {
           referenceType: 'EXPENSE',
           createdAt: businessDate,
         },
+        select: { id: true, ledgerOrder: true },
       });
 
       const expense = await tx.expense.create({
@@ -107,6 +108,13 @@ export class ExpenseService {
         where: { id: transaction.id },
         data: { referenceId: expense.id },
       });
+
+      if (
+        ledgerState.lastCreatedAt &&
+        businessDate.getTime() < ledgerState.lastCreatedAt.getTime()
+      ) {
+        await rebuildLedgerTailFromOrder(tx, transaction.ledgerOrder);
+      }
 
       return expense;
     });
@@ -169,10 +177,9 @@ export class ExpenseService {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const lastTx = await tx.transaction.findFirst({
-        orderBy: { createdAt: 'desc' },
-      });
-      const currentBalance = lastTx ? lastTx.balanceAfter.toNumber() : 0;
+      await acquireLedgerLock(tx);
+      const ledgerState = await getLastLedgerState(tx);
+      const currentBalance = ledgerState.balance;
 
       if (currentBalance < expense.amount.toNumber()) {
         throw new InsufficientBalanceError();
@@ -191,6 +198,7 @@ export class ExpenseService {
           referenceType: 'EXPENSE',
           createdAt: businessDate,
         },
+        select: { id: true, ledgerOrder: true },
       });
 
       const updated = await tx.expense.update({
@@ -208,6 +216,13 @@ export class ExpenseService {
           approvedBy: { select: { id: true, name: true } },
         },
       });
+
+      if (
+        ledgerState.lastCreatedAt &&
+        businessDate.getTime() < ledgerState.lastCreatedAt.getTime()
+      ) {
+        await rebuildLedgerTailFromOrder(tx, transaction.ledgerOrder);
+      }
 
       return updated;
     });

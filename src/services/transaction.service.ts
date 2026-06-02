@@ -1,9 +1,12 @@
 import { prisma } from '../lib/prisma';
 import type { Prisma } from '@prisma/client';
+import { acquireLedgerLock, getLastLedgerState, rebuildLedgerTailFromOrder } from './ledger.service';
 import type { PaginationQuery } from '@tia/shared';
 
 interface TransactionQuery extends PaginationQuery {
   type?: 'INCOME' | 'EXPENSE';
+  year?: number;
+  month?: number;
   search?: string;
   sortBy?: 'createdAt' | 'amount';
   sortOrder?: 'asc' | 'desc';
@@ -27,11 +30,22 @@ interface CreateOtherIncomeInput {
 
 export class TransactionService {
   async findAll(query: TransactionQuery) {
-    const { page = 1, limit = 20, type, search, sortBy = 'createdAt', sortOrder = 'desc' } = query;
+    const { page = 1, limit = 20, type, year, month, search, sortBy = 'createdAt', sortOrder = 'desc' } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.TransactionWhereInput = {};
     if (type) where.type = type;
+    if (year && month) {
+      where.createdAt = {
+        gte: new Date(year, month - 1, 1),
+        lt: new Date(year, month, 1),
+      };
+    } else if (year) {
+      where.createdAt = {
+        gte: new Date(year, 0, 1),
+        lt: new Date(year + 1, 0, 1),
+      };
+    }
     if (search) where.description = { contains: search, mode: 'insensitive' };
 
     const [transactions, total] = await prisma.$transaction([
@@ -55,7 +69,38 @@ export class TransactionService {
       prisma.transaction.count({ where }),
     ]);
 
-    return { transactions, total };
+    const paymentReferenceIds = transactions
+      .filter((tx) => tx.referenceType === 'PAYMENT' && !!tx.referenceId)
+      .map((tx) => tx.referenceId!) as string[];
+
+    const payments = paymentReferenceIds.length > 0
+      ? await prisma.payment.findMany({
+          where: { id: { in: paymentReferenceIds } },
+          select: {
+            id: true,
+            paymentType: { select: { isMandatory: true, name: true } },
+            user: { select: { id: true, name: true, unitNumber: true } },
+          },
+        })
+      : [];
+
+    const paymentMap = new Map(payments.map((p) => [p.id, p]));
+
+    const enriched = transactions.map((tx) => {
+      if (tx.referenceType !== 'PAYMENT' || !tx.referenceId) return tx;
+      const payment = paymentMap.get(tx.referenceId);
+      if (!payment) return tx;
+
+      const isIplPayment = payment.paymentType.isMandatory || payment.paymentType.name.toUpperCase().includes('IPL');
+      if (!isIplPayment) return tx;
+
+      return {
+        ...tx,
+        paymentUser: payment.user,
+      };
+    });
+
+    return { transactions: enriched, total };
   }
 
   async getBalance() {
@@ -234,30 +279,54 @@ export class TransactionService {
 
   async createOtherIncome(input: CreateOtherIncomeInput) {
     const receivedAt = input.receivedAt ?? new Date();
-    const currentBalance = (await this.getBalance()).balance;
-    const afterBalance = Number((currentBalance + input.amount).toFixed(2));
+    return prisma.$transaction(async (tx) => {
+      await acquireLedgerLock(tx);
+      const ledgerState = await getLastLedgerState(tx);
+      const currentBalance = ledgerState.balance;
+      const afterBalance = Number((currentBalance + input.amount).toFixed(2));
 
-    return prisma.transaction.create({
-      data: {
-        type: 'INCOME',
-        amount: input.amount,
-        description: input.description,
-        balanceBefore: currentBalance,
-        balanceAfter: afterBalance,
-        referenceType: 'OTHER_INCOME',
-        createdAt: receivedAt,
-      },
-      select: {
-        id: true,
-        type: true,
-        amount: true,
-        description: true,
-        balanceBefore: true,
-        balanceAfter: true,
-        referenceId: true,
-        referenceType: true,
-        createdAt: true,
-      },
+      const created = await tx.transaction.create({
+        data: {
+          type: 'INCOME',
+          amount: input.amount,
+          description: input.description,
+          balanceBefore: currentBalance,
+          balanceAfter: afterBalance,
+          referenceType: 'OTHER_INCOME',
+          createdAt: receivedAt,
+        },
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          description: true,
+          balanceBefore: true,
+          balanceAfter: true,
+          referenceId: true,
+          referenceType: true,
+          createdAt: true,
+          ledgerOrder: true,
+        },
+      });
+
+      if (
+        ledgerState.lastCreatedAt &&
+        receivedAt.getTime() < ledgerState.lastCreatedAt.getTime()
+      ) {
+        await rebuildLedgerTailFromOrder(tx, created.ledgerOrder);
+      }
+
+      return {
+        id: created.id,
+        type: created.type,
+        amount: created.amount,
+        description: created.description,
+        balanceBefore: created.balanceBefore,
+        balanceAfter: created.balanceAfter,
+        referenceId: created.referenceId,
+        referenceType: created.referenceType,
+        createdAt: created.createdAt,
+      };
     });
   }
 }

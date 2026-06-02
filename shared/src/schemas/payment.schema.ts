@@ -23,6 +23,7 @@ export const createManualPaymentSchema = z.object({
   bankName: z.string().min(1, 'Nama bank wajib diisi').max(100),
   accountName: z.string().max(100).optional(),
   transferDate: z.string().min(1, 'Tanggal transfer wajib diisi'),
+  proofImageUrl: z.string().url('URL bukti transfer tidak valid').optional(),
   description: z.string().max(500).optional(),
   periods: z
     .array(z.string().regex(PERIOD_REGEX, 'Format periode: YYYY-MM'))
