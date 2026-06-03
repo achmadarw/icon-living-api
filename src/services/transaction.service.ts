@@ -122,6 +122,35 @@ export class TransactionService {
     };
   }
 
+  async getOpeningBalance(year: number) {
+    const yearStart = new Date(year, 0, 1);
+    const openingTx = await prisma.transaction.findFirst({
+      where: {
+        referenceType: 'OPENING_BALANCE',
+        createdAt: { lt: yearStart },
+      },
+      orderBy: [{ createdAt: 'desc' }, { ledgerOrder: 'desc' }],
+    });
+
+    if (openingTx) {
+      return { openingBalance: openingTx.balanceAfter.toNumber() };
+    }
+
+    let lastTx = null as Awaited<ReturnType<typeof prisma.transaction.findFirst>>;
+    try {
+      lastTx = await prisma.transaction.findFirst({
+        where: { createdAt: { lt: yearStart } },
+        orderBy: { ledgerOrder: 'desc' },
+      });
+    } catch {
+      lastTx = await prisma.transaction.findFirst({
+        where: { createdAt: { lt: yearStart } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      });
+    }
+    return { openingBalance: lastTx ? lastTx.balanceAfter.toNumber() : 0 };
+  }
+
   async getSummary(year: number, month?: number) {
     const startDate = month
       ? new Date(year, month - 1, 1)
@@ -130,11 +159,19 @@ export class TransactionService {
       ? new Date(year, month, 1)
       : new Date(year + 1, 0, 1);
 
-    const [income, expense] = await prisma.$transaction([
+    const [income, otherIncome, expense] = await prisma.$transaction([
       prisma.transaction.aggregate({
         _sum: { amount: true },
         where: {
           type: 'INCOME',
+          createdAt: { gte: startDate, lt: endDate },
+        },
+      }),
+      prisma.transaction.aggregate({
+        _sum: { amount: true },
+        where: {
+          type: 'INCOME',
+          referenceType: 'OTHER_INCOME',
           createdAt: { gte: startDate, lt: endDate },
         },
       }),
@@ -148,10 +185,12 @@ export class TransactionService {
     ]);
 
     const totalIncome = income._sum.amount?.toNumber() ?? 0;
+    const totalOtherIncome = otherIncome._sum.amount?.toNumber() ?? 0;
     const totalExpense = expense._sum.amount?.toNumber() ?? 0;
 
     return {
       totalIncome,
+      totalOtherIncome,
       totalExpense,
       netIncome: totalIncome - totalExpense,
       period: month ? `${year}-${String(month).padStart(2, '0')}` : `${year}`,

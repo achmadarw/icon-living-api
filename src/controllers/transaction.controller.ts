@@ -72,6 +72,16 @@ export class TransactionController {
     }
   }
 
+  async getOpeningBalance(req: Request, res: Response, next: NextFunction) {
+    try {
+      const year = Number(req.query.year) || new Date().getFullYear();
+      const result = await transactionService.getOpeningBalance(year);
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async createOtherIncome(req: Request, res: Response, next: NextFunction) {
     try {
       const amount = Number(req.body.amount);
