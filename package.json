@@ -14,11 +14,10 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio",
-    "db:import:households": "tsx prisma/import-households-from-form.ts",
-    "db:create-users:households": "tsx prisma/create-users-from-households.ts"
+    "db:studio": "prisma studio"
   },
   "dependencies": {
+    "prisma": "^5.14.0",
     "@prisma/client": "^5.14.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
