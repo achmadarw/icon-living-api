@@ -8,7 +8,7 @@ interface TransactionQuery extends PaginationQuery {
   year?: number;
   month?: number;
   search?: string;
-  sortBy?: 'createdAt' | 'amount';
+  sortBy?: 'createdAt' | 'amount' | 'ledgerOrder';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -30,7 +30,7 @@ interface CreateOtherIncomeInput {
 
 export class TransactionService {
   async findAll(query: TransactionQuery) {
-    const { page = 1, limit = 20, type, year, month, search, sortBy = 'createdAt', sortOrder = 'desc' } = query;
+    const { page = 1, limit = 20, type, year, month, search, sortBy = 'ledgerOrder', sortOrder = 'desc' } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.TransactionWhereInput = {};

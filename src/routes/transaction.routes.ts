@@ -11,7 +11,7 @@ const transactionQuerySchema = paginationSchema.extend({
   year: z.coerce.number().int().min(2000).max(2100).optional(),
   month: z.coerce.number().int().min(1).max(12).optional(),
   search: z.string().trim().optional(),
-  sortBy: z.enum(['createdAt', 'amount']).optional(),
+  sortBy: z.enum(['createdAt', 'amount', 'ledgerOrder']).optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
 });
 
