@@ -73,6 +73,73 @@ export class UserService {
         id: true, name: true, username: true, phone: true,
         role: true, address: true, unitNumber: true, avatarUrl: true,
         isActive: true, createdAt: true, updatedAt: true,
+        household: {
+          select: {
+            id: true,
+            unitNumber: true,
+            occupancyStatus: true,
+            occupancyNote: true,
+            homeCurrentStatus: true,
+            homeStatusNote: true,
+            residentCount: true,
+            emergencyContact: true,
+            hobbies: true,
+            consentGiven: true,
+            formSubmittedAt: true,
+            members: {
+              select: {
+                id: true,
+                name: true,
+                age: true,
+                relationLabel: true,
+                isPrimary: true,
+                notes: true,
+                rawText: true,
+              },
+              orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+            },
+            vehicles: {
+              select: {
+                id: true,
+                type: true,
+                plateNumber: true,
+                color: true,
+                description: true,
+                rawText: true,
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+            staff: {
+              select: {
+                id: true,
+                name: true,
+                role: true,
+                isLiveIn: true,
+                description: true,
+                rawText: true,
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+            emergencyContacts: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                relation: true,
+                priority: true,
+                rawText: true,
+              },
+              orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+            },
+            hobbiesDetail: {
+              select: {
+                id: true,
+                hobbyText: true,
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
       },
     });
 

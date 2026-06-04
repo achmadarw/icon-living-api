@@ -32,6 +32,7 @@ export interface IncomeReportItem {
   periods: string[];
   amount: number;
   status: string;
+  sourceType: 'IPL' | 'OTHER_INCOME';
 }
 
 export interface IncomeReportData {
@@ -159,43 +160,112 @@ export class ReportService {
     };
   }
 
-  /** Income report from approved payments. */
+  /** Income report aligned with overview: IPL by billing period, non-IPL by cash transaction date. */
   async getIncomeReport(query: IncomeReportQuery): Promise<IncomeReportData> {
     const { year, month, paymentTypeId } = query;
     const startDate = month ? new Date(year, month - 1, 1) : new Date(year, 0, 1);
     const endDate = month ? new Date(year, month, 1) : new Date(year + 1, 0, 1);
+    const selectedPeriods = month
+      ? [`${year}-${String(month).padStart(2, '0')}`]
+      : Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
 
-    const where: Prisma.PaymentWhereInput = {
+    const paymentWhere: Prisma.PaymentWhereInput = {
       status: 'APPROVED',
-      reviewedAt: { gte: startDate, lt: endDate },
+      ...(paymentTypeId
+        ? { paymentTypeId }
+        : {
+            paymentType: {
+              isActive: true,
+              OR: [
+                { isMandatory: true },
+                { name: { contains: 'IPL', mode: 'insensitive' } },
+              ],
+            },
+          }),
     };
-    if (paymentTypeId) where.paymentTypeId = paymentTypeId;
 
-    const payments = await prisma.payment.findMany({
-      where,
-      include: {
-        user: { select: { name: true, unitNumber: true } },
-        paymentType: { select: { name: true } },
-        periods: { select: { period: true } },
-      },
-      orderBy: { reviewedAt: 'asc' },
+    const [paymentPeriods, otherIncomeTransactions] = await prisma.$transaction([
+      prisma.paymentPeriod.findMany({
+        where: {
+          period: { in: selectedPeriods },
+          payment: paymentWhere,
+        },
+        select: {
+          period: true,
+          payment: {
+            select: {
+              id: true,
+              reviewedAt: true,
+              createdAt: true,
+              amount: true,
+              status: true,
+              user: { select: { name: true, unitNumber: true } },
+              paymentType: { select: { name: true } },
+              periods: { select: { period: true } },
+            },
+          },
+        },
+      }),
+      prisma.transaction.findMany({
+        where: {
+          type: 'INCOME',
+          referenceType: 'OTHER_INCOME',
+          createdAt: { gte: startDate, lt: endDate },
+        },
+        select: {
+          id: true,
+          createdAt: true,
+          amount: true,
+          description: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const iplItems: IncomeReportItem[] = paymentPeriods.map((pp) => {
+      const periodsCount = pp.payment.periods.length || 1;
+      return {
+        id: `${pp.payment.id}:${pp.period}`,
+        date: pp.payment.reviewedAt ?? pp.payment.createdAt,
+        userName: pp.payment.user.name,
+        unitNumber: pp.payment.user.unitNumber,
+        paymentTypeName: pp.payment.paymentType.name,
+        periods: [pp.period],
+        amount: round2(pp.payment.amount.toNumber() / periodsCount),
+        status: pp.payment.status,
+        sourceType: 'IPL',
+      };
+    });
+
+    const otherIncomeItems: IncomeReportItem[] = paymentTypeId ? [] : otherIncomeTransactions.map((tx) => ({
+      id: tx.id,
+      date: tx.createdAt,
+      userName: tx.description,
+      unitNumber: null,
+      paymentTypeName: 'Donatur',
+      periods: [],
+      amount: tx.amount.toNumber(),
+      status: 'APPROVED',
+      sourceType: 'OTHER_INCOME',
+    }));
+
+    const items: IncomeReportItem[] = [...iplItems, ...otherIncomeItems].sort((a, b) => {
+      const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return a.id.localeCompare(b.id);
     });
 
     let paymentTypeFilter: string | undefined;
     if (paymentTypeId) {
-      const pt = await prisma.paymentType.findUnique({ where: { id: paymentTypeId }, select: { name: true } });
+      const pt = await prisma.paymentType.findUnique({
+        where: { id: paymentTypeId },
+        select: { name: true },
+      });
       paymentTypeFilter = pt?.name;
     }
 
-    const items: IncomeReportItem[] = payments.map((p) => ({
-      id: p.id, date: p.reviewedAt ?? p.createdAt,
-      userName: p.user.name, unitNumber: p.user.unitNumber,
-      paymentTypeName: p.paymentType.name,
-      periods: p.periods.map((pp) => pp.period).sort(),
-      amount: p.amount.toNumber(), status: p.status,
-    }));
-
-    const totalAmount = items.reduce((sum, i) => sum + i.amount, 0);
+    const totalAmount = round2(items.reduce((sum, i) => sum + i.amount, 0));
 
     return {
       year, month,
