@@ -217,8 +217,8 @@ export class TransactionService {
     const months = Array.from({ length: 12 }, (_, i) => i + 1);
     const periods = months.map((month) => `${year}-${String(month).padStart(2, '0')}`);
 
-    const [iplType, totalActiveUsers] = await prisma.$transaction([
-      prisma.paymentType.findFirst({
+    const [iplTypes, totalActiveUsers] = await prisma.$transaction([
+      prisma.paymentType.findMany({
         where: {
           isActive: true,
           OR: [
@@ -231,7 +231,7 @@ export class TransactionService {
       prisma.user.count({ where: { isActive: true } }),
     ]);
 
-    if (!iplType) {
+    if (iplTypes.length === 0) {
       return periods.map((period) => ({
         month: period,
         period,
@@ -243,7 +243,9 @@ export class TransactionService {
       }));
     }
 
-    const fixedAmount = iplType.fixedAmount?.toNumber() ?? 0;
+    const primaryIplType = iplTypes[0];
+    const iplTypeIds = iplTypes.map((type) => type.id);
+    const fixedAmount = primaryIplType.fixedAmount?.toNumber() ?? 0;
     const targetAmount = fixedAmount * totalActiveUsers;
 
     const paidPeriods = await prisma.paymentPeriod.findMany({
@@ -251,7 +253,7 @@ export class TransactionService {
         period: { in: periods },
         payment: {
           status: 'APPROVED',
-          paymentTypeId: iplType.id,
+          paymentTypeId: { in: iplTypeIds },
         },
       },
       select: {
