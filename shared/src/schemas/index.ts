@@ -82,6 +82,22 @@ export { notificationQuerySchema } from './notification.schema';
 export type { NotificationQuery } from './notification.schema';
 
 export {
+  createBudgetSchema,
+  updateBudgetSchema,
+  budgetQuerySchema,
+  budgetVsActualQuerySchema,
+  budgetFrequencyEnum,
+  cyclesPerYear,
+} from './budget.schema';
+export type {
+  CreateBudgetInput,
+  UpdateBudgetInput,
+  BudgetQuery,
+  BudgetVsActualQuery,
+  BudgetFrequency,
+} from './budget.schema';
+
+export {
   iplMonthlyQuerySchema,
   reportFormatSchema,
   incomeReportQuerySchema,

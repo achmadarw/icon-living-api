@@ -1,5 +1,6 @@
 import { Router, type Router as RouterType } from 'express';
 import { reportController } from '../controllers/report.controller';
+import { budgetController } from '../controllers/budget.controller';
 import { validate } from '../middleware/validate';
 import { authenticate } from '../middleware/authenticate';
 import { authorize } from '../middleware/authorize';
@@ -11,6 +12,7 @@ import {
   incomeExportQuerySchema,
   expenseReportQuerySchema,
   expenseExportQuerySchema,
+  budgetVsActualQuerySchema,
 } from '@tia/shared';
 
 const router: RouterType = Router();
@@ -59,6 +61,13 @@ router.get(
   exportRateLimit,
   validate(expenseExportQuerySchema, 'query'),
   (req, res, next) => reportController.exportExpense(req, res, next),
+);
+
+// ─── Budget vs Actual ───────────────────────────────────
+router.get(
+  '/budget-vs-actual',
+  validate(budgetVsActualQuerySchema, 'query'),
+  (req, res, next) => budgetController.budgetVsActual(req, res, next),
 );
 
 export default router;

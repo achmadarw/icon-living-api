@@ -104,12 +104,44 @@ model ExpenseCategory {
   isActive         Boolean @default(true)
 
   expenses Expense[]
+  budgets  CategoryBudget[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("expense_categories")
 }
+// Frekuensi pembayaran anggaran kategori.
+// - MONTHLY: tiap bulan (12 siklus per tahun)
+// - BIMONTHLY: tiap 2 bulan (6 siklus per tahun) - mis. ganti oli
+// - QUARTERLY: tiap 3 bulan (4 siklus per tahun) - mis. potong rumput
+// - YEARLY: setahun sekali (1 siklus per tahun) - mis. THR
+enum BudgetFrequency {
+  MONTHLY
+  BIMONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+// Anggaran kategori per tahun.
+model CategoryBudget {
+  id             String          @id @default(cuid())
+  categoryId     String
+  year           Int
+  amountPerCycle Decimal         @db.Decimal(15, 2)
+  frequency      BudgetFrequency @default(MONTHLY)
+  note           String?
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([categoryId, year])
+  @@index([year])
+  @@map("category_budgets")
+}
+
 
 // ─── Core Models ────────────────────────────────────────
 

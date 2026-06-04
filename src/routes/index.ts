@@ -10,6 +10,7 @@ import transactionRoutes from './transaction.routes';
 import uploadRoutes from './upload.routes';
 import notificationRoutes from './notification.routes';
 import reportRoutes from './report.routes';
+import budgetRoutes from './budget.routes';
 
 const router: RouterType = Router();
 
@@ -24,5 +25,6 @@ router.use('/transactions', transactionRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/reports', reportRoutes);
+router.use('/budgets', budgetRoutes);
 
 export default router;

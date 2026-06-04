@@ -10,6 +10,19 @@ export function validate(schema: ZodSchema, source: ValidationSource = 'body') {
     logger.info(`📋 VALIDATING ${source.toUpperCase()}`);
     logger.step(1, `Request ${source}`, req[source]);
 
+    if (!schema || typeof schema.safeParse !== 'function') {
+      logger.error(`Validation schema is not configured for ${source}`, {
+        source,
+        schemaType: typeof schema,
+      });
+      return sendError(
+        res,
+        500,
+        'INTERNAL_ERROR',
+        'Konfigurasi validasi tidak ditemukan',
+      );
+    }
+
     const result = schema.safeParse(req[source]);
 
     if (!result.success) {
