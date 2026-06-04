@@ -39,3 +39,4 @@ export declare const updatePaymentTypeSchema: z.ZodObject<{
 }>;
 export type CreatePaymentTypeInput = z.infer<typeof createPaymentTypeSchema>;
 export type UpdatePaymentTypeInput = z.infer<typeof updatePaymentTypeSchema>;
+//# sourceMappingURL=payment-type.schema.d.ts.map

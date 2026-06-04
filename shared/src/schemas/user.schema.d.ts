@@ -12,16 +12,16 @@ export declare const createUserSchema: z.ZodObject<{
     password: string;
     name: string;
     role: "WARGA" | "BENDAHARA" | "KETUA";
-    phone?: string | undefined;
     unitNumber?: string | undefined;
+    phone?: string | undefined;
     address?: string | undefined;
 }, {
     username: string;
     password: string;
     name: string;
     role: "WARGA" | "BENDAHARA" | "KETUA";
-    phone?: string | undefined;
     unitNumber?: string | undefined;
+    phone?: string | undefined;
     address?: string | undefined;
 }>;
 export declare const updateUserSchema: z.ZodObject<{
@@ -31,16 +31,16 @@ export declare const updateUserSchema: z.ZodObject<{
     role: z.ZodOptional<z.ZodEnum<["WARGA", "BENDAHARA", "KETUA"]>>;
     address: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
+    unitNumber?: string | undefined;
     name?: string | undefined;
     phone?: string | undefined;
     role?: "WARGA" | "BENDAHARA" | "KETUA" | undefined;
-    unitNumber?: string | undefined;
     address?: string | undefined;
 }, {
+    unitNumber?: string | undefined;
     name?: string | undefined;
     phone?: string | undefined;
     role?: "WARGA" | "BENDAHARA" | "KETUA" | undefined;
-    unitNumber?: string | undefined;
     address?: string | undefined;
 }>;
 export declare const updateProfileSchema: z.ZodObject<{
@@ -75,3 +75,4 @@ export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+//# sourceMappingURL=user.schema.d.ts.map

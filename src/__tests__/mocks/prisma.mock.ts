@@ -29,6 +29,10 @@ export const prismaMock = {
     update: vi.fn(),
     count: vi.fn(),
   },
+  household: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+  },
   paymentPeriod: {
     findMany: vi.fn(),
   },

@@ -33,3 +33,4 @@ export declare const updateExpenseCategorySchema: z.ZodObject<{
 }>;
 export type CreateExpenseCategoryInput = z.infer<typeof createExpenseCategorySchema>;
 export type UpdateExpenseCategoryInput = z.infer<typeof updateExpenseCategorySchema>;
+//# sourceMappingURL=expense-category.schema.d.ts.map

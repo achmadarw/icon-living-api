@@ -91,3 +91,4 @@ export declare const expenseExportQuerySchema: z.ZodObject<{
     format?: "pdf" | "csv" | undefined;
 }>;
 export type ExpenseExportQuery = z.infer<typeof expenseExportQuerySchema>;
+//# sourceMappingURL=report.schema.d.ts.map

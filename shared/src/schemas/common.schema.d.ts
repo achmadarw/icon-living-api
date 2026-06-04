@@ -3,11 +3,11 @@ export declare const paginationSchema: z.ZodObject<{
     page: z.ZodDefault<z.ZodNumber>;
     limit: z.ZodDefault<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    limit: number;
     page: number;
+    limit: number;
 }, {
-    limit?: number | undefined;
     page?: number | undefined;
+    limit?: number | undefined;
 }>;
 export declare const idParamSchema: z.ZodObject<{
     id: z.ZodString;
@@ -18,3 +18,4 @@ export declare const idParamSchema: z.ZodObject<{
 }>;
 export type PaginationQuery = z.infer<typeof paginationSchema>;
 export type IdParam = z.infer<typeof idParamSchema>;
+//# sourceMappingURL=common.schema.d.ts.map

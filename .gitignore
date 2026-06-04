@@ -67,4 +67,3 @@ Thumbs.db
 # Runtime
 node_modules/
 .pnpm-store/
-uploads/*

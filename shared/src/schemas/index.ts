@@ -115,3 +115,12 @@ export type {
   IncomeExportQuery,
   ExpenseExportQuery,
 } from './report.schema';
+
+export {
+  createHouseholdSchema,
+  updateHouseholdSchema,
+} from './household.schema';
+export type {
+  CreateHouseholdInput,
+  UpdateHouseholdInput,
+} from './household.schema';

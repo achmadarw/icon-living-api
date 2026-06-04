@@ -46,3 +46,4 @@ export interface ApiError {
     details?: Record<string, unknown>;
 }
 export type ErrorCode = 'VALIDATION_ERROR' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND' | 'DUPLICATE' | 'DUPLICATE_UNIT' | 'INSUFFICIENT_BALANCE' | 'INVALID_STATUS' | 'FILE_TOO_LARGE' | 'INVALID_FILE_TYPE' | 'RATE_LIMIT' | 'DASHBOARD_ONLY_PENGURUS' | 'INTERNAL_ERROR';
+//# sourceMappingURL=index.d.ts.map

@@ -20,3 +20,4 @@ export declare const ROLES: {
     readonly PENGURUS: readonly ["BENDAHARA", "KETUA"];
     readonly ALL: readonly ["WARGA", "BENDAHARA", "KETUA"];
 };
+//# sourceMappingURL=index.d.ts.map

@@ -7,6 +7,18 @@ import type { CreateUserInput, UpdateUserInput, UpdateProfileInput, ChangePasswo
 import { logger } from '../utils/logger';
 
 export class UserService {
+  private async findHouseholdIdByUnit(unitNumber?: string | null) {
+    const normalizedUnit = unitNumber?.trim();
+    if (!normalizedUnit) return null;
+
+    const household = await prisma.household.findUnique({
+      where: { unitNumber: normalizedUnit },
+      select: { id: true },
+    });
+
+    return household?.id ?? null;
+  }
+
   async create(input: CreateUserInput) {
     const existingUsername = await prisma.user.findUnique({
       where: { username: input.username },
@@ -26,6 +38,8 @@ export class UserService {
 
     const passwordHash = await bcrypt.hash(input.password, AUTH.BCRYPT_ROUNDS);
 
+    const householdId = await this.findHouseholdIdByUnit(input.unitNumber);
+
     const user = await prisma.user.create({
       data: {
         name: input.name,
@@ -34,6 +48,7 @@ export class UserService {
         role: input.role,
         unitNumber: input.unitNumber,
         address: input.address,
+        householdId,
         passwordHash,
       },
     });
@@ -58,6 +73,7 @@ export class UserService {
           id: true, name: true, username: true, phone: true,
           role: true, address: true, unitNumber: true, avatarUrl: true,
           isActive: true, createdAt: true, updatedAt: true,
+          householdId: true,
         },
       }),
       prisma.user.count(),
@@ -73,6 +89,7 @@ export class UserService {
         id: true, name: true, username: true, phone: true,
         role: true, address: true, unitNumber: true, avatarUrl: true,
         isActive: true, createdAt: true, updatedAt: true,
+        householdId: true,
         household: {
           select: {
             id: true,
@@ -162,13 +179,21 @@ export class UserService {
       }
     }
 
+    const { unitNumber, ...restInput } = input;
+    const shouldSyncHousehold = Object.prototype.hasOwnProperty.call(input, 'unitNumber');
+    const householdId = shouldSyncHousehold ? await this.findHouseholdIdByUnit(unitNumber) : undefined;
+
     const user = await prisma.user.update({
       where: { id },
-      data: input,
+      data: {
+        ...restInput,
+        ...(shouldSyncHousehold ? { unitNumber, householdId } : {}),
+      },
       select: {
         id: true, name: true, username: true, phone: true,
         role: true, address: true, unitNumber: true, avatarUrl: true,
         isActive: true, createdAt: true, updatedAt: true,
+        householdId: true,
       },
     });
 

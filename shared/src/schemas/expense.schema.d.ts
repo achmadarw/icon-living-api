@@ -3,16 +3,28 @@ export declare const createExpenseSchema: z.ZodObject<{
     categoryId: z.ZodString;
     amount: z.ZodNumber;
     description: z.ZodString;
+    expenseDate: z.ZodString;
+    paymentMethod: z.ZodOptional<z.ZodString>;
+    recipient: z.ZodOptional<z.ZodString>;
+    referenceNumber: z.ZodOptional<z.ZodString>;
     attachmentUrl: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     description: string;
     amount: number;
     categoryId: string;
+    expenseDate: string;
+    paymentMethod?: string | undefined;
+    recipient?: string | undefined;
+    referenceNumber?: string | undefined;
     attachmentUrl?: string | undefined;
 }, {
     description: string;
     amount: number;
     categoryId: string;
+    expenseDate: string;
+    paymentMethod?: string | undefined;
+    recipient?: string | undefined;
+    referenceNumber?: string | undefined;
     attachmentUrl?: string | undefined;
 }>;
 export declare const approveExpenseSchema: z.ZodObject<{
@@ -21,6 +33,34 @@ export declare const approveExpenseSchema: z.ZodObject<{
     note?: string | undefined;
 }, {
     note?: string | undefined;
+}>;
+export declare const updateExpenseSchema: z.ZodObject<{
+    categoryId: z.ZodString;
+    amount: z.ZodNumber;
+    description: z.ZodString;
+    expenseDate: z.ZodString;
+    paymentMethod: z.ZodOptional<z.ZodString>;
+    recipient: z.ZodOptional<z.ZodString>;
+    referenceNumber: z.ZodOptional<z.ZodString>;
+    attachmentUrl: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    description: string;
+    amount: number;
+    categoryId: string;
+    expenseDate: string;
+    paymentMethod?: string | undefined;
+    recipient?: string | undefined;
+    referenceNumber?: string | undefined;
+    attachmentUrl?: string | undefined;
+}, {
+    description: string;
+    amount: number;
+    categoryId: string;
+    expenseDate: string;
+    paymentMethod?: string | undefined;
+    recipient?: string | undefined;
+    referenceNumber?: string | undefined;
+    attachmentUrl?: string | undefined;
 }>;
 export declare const rejectExpenseSchema: z.ZodObject<{
     note: z.ZodString;
@@ -35,17 +75,19 @@ export declare const expenseQuerySchema: z.ZodObject<{
     status: z.ZodOptional<z.ZodEnum<["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"]>>;
     categoryId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    limit: number;
     page: number;
+    limit: number;
     status?: "APPROVED" | "REJECTED" | "DRAFT" | "SUBMITTED" | undefined;
     categoryId?: string | undefined;
 }, {
     status?: "APPROVED" | "REJECTED" | "DRAFT" | "SUBMITTED" | undefined;
-    limit?: number | undefined;
     page?: number | undefined;
+    limit?: number | undefined;
     categoryId?: string | undefined;
 }>;
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
+export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
 export type ApproveExpenseInput = z.infer<typeof approveExpenseSchema>;
 export type RejectExpenseInput = z.infer<typeof rejectExpenseSchema>;
 export type ExpenseQuery = z.infer<typeof expenseQuerySchema>;
+//# sourceMappingURL=expense.schema.d.ts.map

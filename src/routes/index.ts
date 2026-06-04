@@ -11,6 +11,7 @@ import uploadRoutes from './upload.routes';
 import notificationRoutes from './notification.routes';
 import reportRoutes from './report.routes';
 import budgetRoutes from './budget.routes';
+import householdRoutes from './household.routes';
 
 const router: RouterType = Router();
 
@@ -26,5 +27,6 @@ router.use('/upload', uploadRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/reports', reportRoutes);
 router.use('/budgets', budgetRoutes);
+router.use('/households', householdRoutes);
 
 export default router;
