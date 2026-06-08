@@ -10,6 +10,24 @@ export class PaymentService {
     requestedPaymentTypeId: string,
     months: string[],
   ): Promise<string> {
+    const requestedType = await prisma.paymentType.findUnique({
+      where: { id: requestedPaymentTypeId },
+      select: { id: true, isActive: true, isMandatory: true },
+    });
+
+    if (requestedType?.isActive && requestedType.isMandatory) {
+      return requestedType.id;
+    }
+
+    const mandatoryType = await prisma.paymentType.findFirst({
+      where: { isMandatory: true, isActive: true },
+      select: { id: true },
+    });
+
+    if (mandatoryType) {
+      return mandatoryType.id;
+    }
+
     const approvedPayments = await prisma.payment.findMany({
       where: {
         status: 'APPROVED',
