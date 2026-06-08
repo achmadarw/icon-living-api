@@ -6,67 +6,28 @@ import { acquireLedgerLock, getLastLedgerState, rebuildLedgerTailFromOrder } fro
 import type { CreatePaymentInput, CreateManualPaymentInput, PaymentQuery, ArrearsQuery } from '@tia/shared';
 
 export class PaymentService {
-  private async resolveArrearsPaymentTypeId(
-    requestedPaymentTypeId: string,
-    months: string[],
-  ): Promise<string> {
-    const requestedType = await prisma.paymentType.findUnique({
-      where: { id: requestedPaymentTypeId },
-      select: { id: true, isActive: true, isMandatory: true },
-    });
-
-    if (requestedType?.isActive && requestedType.isMandatory) {
-      return requestedType.id;
-    }
-
-    const mandatoryType = await prisma.paymentType.findFirst({
-      where: { isMandatory: true, isActive: true },
+  private async getIplPaymentTypeIds(requestedPaymentTypeId?: string): Promise<string[]> {
+    const iplTypes = await prisma.paymentType.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { isMandatory: true },
+          { name: { contains: 'IPL', mode: 'insensitive' } },
+        ],
+      },
       select: { id: true },
     });
 
-    if (mandatoryType) {
-      return mandatoryType.id;
+    const ids = iplTypes.map((type) => type.id);
+    if (requestedPaymentTypeId && !ids.includes(requestedPaymentTypeId)) {
+      const requestedType = await prisma.paymentType.findUnique({
+        where: { id: requestedPaymentTypeId },
+        select: { id: true, isActive: true },
+      });
+      if (requestedType?.isActive) ids.push(requestedType.id);
     }
 
-    const approvedPayments = await prisma.payment.findMany({
-      where: {
-        status: 'APPROVED',
-        periods: { some: { period: { in: months } } },
-        paymentType: {
-          isActive: true,
-          OR: [
-            { isMandatory: true },
-            { name: { contains: 'IPL', mode: 'insensitive' } },
-          ],
-        },
-      },
-      select: { paymentTypeId: true },
-    });
-
-    if (approvedPayments.length === 0) {
-      return requestedPaymentTypeId;
-    }
-
-    const counts: Record<string, number> = {};
-    for (const p of approvedPayments) {
-      counts[p.paymentTypeId] = (counts[p.paymentTypeId] ?? 0) + 1;
-    }
-
-    const requestedCount = counts[requestedPaymentTypeId] ?? 0;
-    if (requestedCount > 0) {
-      return requestedPaymentTypeId;
-    }
-
-    let fallbackId = requestedPaymentTypeId;
-    let maxCount = -1;
-    Object.entries(counts).forEach(([id, count]) => {
-      if (count > maxCount) {
-        maxCount = count;
-        fallbackId = id;
-      }
-    });
-
-    return fallbackId;
+    return ids;
   }
 
   async create(userId: string, input: CreatePaymentInput) {
@@ -429,17 +390,15 @@ export class PaymentService {
       select: { id: true, name: true, unitNumber: true },
     });
 
-    const resolvedPaymentTypeId = await this.resolveArrearsPaymentTypeId(
-      paymentTypeId,
-      allMonths,
-    );
+    const iplPaymentTypeIds = await this.getIplPaymentTypeIds(paymentTypeId);
 
-    // Find all approved payments for this type+year
+    // Find all approved IPL payments for this year.
+    // IPL 100 and IPL 200 both settle the same monthly obligation.
     const approvedPeriods = await prisma.paymentPeriod.findMany({
       where: {
         period: { in: allMonths },
         payment: {
-          paymentTypeId: resolvedPaymentTypeId,
+          paymentTypeId: { in: iplPaymentTypeIds },
           status: 'APPROVED',
           ...(userId ? { userId } : {}),
         },
@@ -455,7 +414,7 @@ export class PaymentService {
       where: {
         period: { in: allMonths },
         payment: {
-          paymentTypeId: resolvedPaymentTypeId,
+          paymentTypeId: { in: iplPaymentTypeIds },
           status: 'PENDING',
           ...(userId ? { userId } : {}),
         },

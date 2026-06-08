@@ -76,16 +76,28 @@ export class ReportService {
     const { month, year } = query;
     const period = `${year}-${String(month).padStart(2, '0')}`;
 
-    const iplType = await prisma.paymentType.findFirst({
-      where: { isMandatory: true, isActive: true },
+    const iplTypes = await prisma.paymentType.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { isMandatory: true },
+          { name: { contains: 'IPL', mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, name: true, fixedAmount: true },
     });
 
-    if (!iplType) {
+    if (iplTypes.length === 0) {
       return {
         month, year, period, paymentTypeName: 'IPL', fixedAmount: null, residents: [],
         summary: { total: 0, lunas: 0, pending: 0, belumBayar: 0, totalNominalMasuk: 0, totalNominalPending: 0 },
       };
     }
+
+    const iplTypeIds = iplTypes.map((type) => type.id);
+    const fixedAmounts = iplTypes
+      .map((type) => type.fixedAmount?.toNumber() ?? null)
+      .filter((amount): amount is number => amount !== null);
 
     const [users, paymentPeriods] = await prisma.$transaction([
       prisma.user.findMany({
@@ -94,7 +106,7 @@ export class ReportService {
         orderBy: { unitNumber: 'asc' },
       }),
       prisma.paymentPeriod.findMany({
-        where: { period, payment: { paymentTypeId: iplType.id } },
+        where: { period, payment: { paymentTypeId: { in: iplTypeIds } } },
         select: {
           period: true,
           payment: {
@@ -146,8 +158,8 @@ export class ReportService {
     const pending = residents.filter((r) => r.status === 'PENDING').length;
 
     return {
-      month, year, period, paymentTypeName: iplType.name,
-      fixedAmount: iplType.fixedAmount ? iplType.fixedAmount.toNumber() : null,
+      month, year, period, paymentTypeName: 'IPL',
+      fixedAmount: fixedAmounts.length === 1 ? fixedAmounts[0] : null,
       residents,
       summary: {
         total: residents.length,
