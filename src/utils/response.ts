@@ -1,12 +1,20 @@
 import type { Response } from 'express';
 import type { PaginationMeta } from '@tia/shared';
 
+function serializeJsonSafe<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (_, nestedValue) =>
+      typeof nestedValue === 'bigint' ? nestedValue.toString() : nestedValue,
+    ),
+  ) as T;
+}
+
 export function sendSuccess<T>(res: Response, data: T, statusCode = 200, meta?: PaginationMeta) {
   const body: Record<string, unknown> = { success: true, data };
   if (meta) {
     body.meta = meta;
   }
-  return res.status(statusCode).json(body);
+  return res.status(statusCode).json(serializeJsonSafe(body));
 }
 
 export function sendCreated<T>(res: Response, data: T) {
@@ -31,7 +39,7 @@ export function sendError(
   if (details) {
     (body.error as Record<string, unknown>).details = details;
   }
-  return res.status(statusCode).json(body);
+  return res.status(statusCode).json(serializeJsonSafe(body));
 }
 
 export function buildPaginationMeta(page: number, limit: number, total: number): PaginationMeta {
