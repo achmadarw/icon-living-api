@@ -5,7 +5,7 @@ import { AppError } from '../utils/errors';
 import { UPLOAD } from '@tia/shared';
 import { config } from '../config';  // tambah ini
 
-const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
+const UPLOAD_DIR = path.resolve(process.cwd(), config.upload.dir);
 
 export class UploadService {
   async ensureUploadDir() {
@@ -37,7 +37,7 @@ export class UploadService {
   private getBaseUrl(): string {
     if (config.isProduction) {
       // Di production, set APP_URL di .env
-      return process.env.APP_URL ?? 'https://api.tia-acropolis.com';
+      return config.appUrl ?? 'https://api.tia-acropolis.com';
     }
     // Di development, gunakan host lokal dengan port dari config
     return `http://localhost:${config.port}`;

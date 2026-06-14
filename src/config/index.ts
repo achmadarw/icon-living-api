@@ -7,6 +7,8 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
+  APP_URL: z.string().url().optional(),
+  UPLOAD_DIR: z.string().default('uploads'),
   // Firebase Admin SDK (FCM Push Notification) — optional; jika kosong, push dinonaktifkan
   FIREBASE_PROJECT_ID: z.string().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
@@ -42,6 +44,10 @@ function loadConfig() {
     },
     cors: {
       origins: env.CORS_ORIGINS.split(',').map((o) => o.trim()),
+    },
+    appUrl: env.APP_URL,
+    upload: {
+      dir: env.UPLOAD_DIR,
     },
     firebase: {
       projectId: env.FIREBASE_PROJECT_ID,

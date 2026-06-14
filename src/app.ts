@@ -54,6 +54,7 @@ export function createApp(): Express {
 
   // ─── API Docs ────────────────────────────────────────
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.use('/uploads', express.static(path.resolve(process.cwd(), config.upload.dir)));
 
   // ─── Routes ──────────────────────────────────────────
   app.use('/v1', routes);
@@ -62,7 +63,6 @@ export function createApp(): Express {
   app.use(errorHandler);
 
   // ─── Static Files (uploads) ──────────────────────── ← TAMBAH INI
-  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
   return app;
 }
