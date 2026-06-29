@@ -306,6 +306,21 @@ export class ExpenseService {
     return updated;
   }
 
+  async updateAttachment(id: string, attachmentUrl: string) {
+    await this.findById(id);
+
+    return prisma.expense.update({
+      where: { id },
+      data: { attachmentUrl },
+      include: {
+        category: true,
+        requestedBy: { select: { id: true, name: true } },
+        approvedBy: { select: { id: true, name: true } },
+        transaction: true,
+      },
+    });
+  }
+
   async delete(id: string) {
     const expense = await this.findById(id);
 

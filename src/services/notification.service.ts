@@ -230,18 +230,29 @@ export class NotificationService {
     userId: string;
     userName: string;
     paymentTypeName: string;
+    periods?: string[];
   }) {
     // Notify all BENDAHARA users
-    const bendaharas = await prisma.user.findMany({
+    const bendaharas = (await prisma.user.findMany({
       where: { role: 'BENDAHARA', isActive: true },
       select: { id: true },
-    });
+    })) ?? [];
+
+    if (bendaharas.length === 0) {
+      console.warn('[notification.onPaymentSubmitted] No active bendahara users found', {
+        paymentId: payment.id,
+      });
+    }
+
+    const periodText = payment.periods?.length
+      ? ` periode ${payment.periods.join(', ')}`
+      : '';
 
     const notifications = await this.createMany(
       bendaharas.map((b) => ({
         type: 'PAYMENT_SUBMITTED' as NotificationType,
         title: 'Pembayaran Baru',
-        message: `${payment.userName} mengirim bukti pembayaran ${payment.paymentTypeName} sebesar Rp ${payment.amount.toLocaleString('id-ID')}`,
+        message: `${payment.userName} mengirim bukti pembayaran ${payment.paymentTypeName}${periodText} sebesar Rp ${payment.amount.toLocaleString('id-ID')}`,
         userId: b.id,
         referenceId: payment.id,
         referenceType: 'PAYMENT',

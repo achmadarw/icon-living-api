@@ -3,6 +3,7 @@ import { paymentController } from '../controllers/payment.controller';
 import { validate } from '../middleware/validate';
 import { authenticate } from '../middleware/authenticate';
 import { authorize } from '../middleware/authorize';
+import { imageUpload } from '../middleware/upload-file';
 import {
   createPaymentSchema, createManualPaymentSchema, reviewPaymentSchema, rejectPaymentSchema,
   paymentQuerySchema, arrearsQuerySchema, idParamSchema,
@@ -22,6 +23,7 @@ router.get('/arrears', validate(arrearsQuerySchema, 'query'), (req, res, next) =
 
 // Pengurus: all payments
 router.get('/', authorize('KETUA', 'BENDAHARA'), validate(paymentQuerySchema, 'query'), (req, res, next) => paymentController.findAll(req, res, next));
+router.patch('/:id/proof-image', authorize('KETUA', 'BENDAHARA'), validate(idParamSchema, 'params'), imageUpload.single('file'), (req, res, next) => paymentController.updateProofImage(req, res, next));
 router.get('/:id', validate(idParamSchema, 'params'), (req, res, next) => paymentController.findById(req, res, next));
 router.patch('/:id/approve', authorize('KETUA', 'BENDAHARA'), validate(idParamSchema, 'params'), validate(reviewPaymentSchema), (req, res, next) => paymentController.approve(req, res, next));
 router.patch('/:id/reject', authorize('KETUA', 'BENDAHARA'), validate(idParamSchema, 'params'), validate(rejectPaymentSchema), (req, res, next) => paymentController.reject(req, res, next));

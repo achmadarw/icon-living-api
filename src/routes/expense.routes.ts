@@ -3,6 +3,7 @@ import { expenseController } from '../controllers/expense.controller';
 import { validate } from '../middleware/validate';
 import { authenticate } from '../middleware/authenticate';
 import { authorize } from '../middleware/authorize';
+import { imageUpload } from '../middleware/upload-file';
 import {
   createExpenseSchema, updateExpenseSchema, approveExpenseSchema, rejectExpenseSchema,
   expenseQuerySchema, idParamSchema,
@@ -14,6 +15,7 @@ router.use(authenticate);
 
 router.post('/', authorize('KETUA', 'BENDAHARA'), validate(createExpenseSchema), (req, res, next) => expenseController.create(req, res, next));
 router.get('/', authorize('KETUA', 'BENDAHARA'), validate(expenseQuerySchema, 'query'), (req, res, next) => expenseController.findAll(req, res, next));
+router.patch('/:id/attachment', authorize('KETUA', 'BENDAHARA'), validate(idParamSchema, 'params'), imageUpload.single('file'), (req, res, next) => expenseController.updateAttachment(req, res, next));
 router.get('/:id', authorize('KETUA', 'BENDAHARA'), validate(idParamSchema, 'params'), (req, res, next) => expenseController.findById(req, res, next));
 router.patch('/:id', authorize('BENDAHARA'), validate(idParamSchema, 'params'), validate(updateExpenseSchema), (req, res, next) => expenseController.update(req, res, next));
 router.delete('/:id', authorize('BENDAHARA'), validate(idParamSchema, 'params'), (req, res, next) => expenseController.delete(req, res, next));

@@ -29,13 +29,17 @@ function hashText(raw: string): string {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
-async function sendOtpViaFonnte(phone: string, otp: string): Promise<void> {
+async function sendOtpViaFonnte(
+  phone: string,
+  otp: string,
+  account: { username: string; unitNumber: string },
+): Promise<void> {
   const token = process.env.FONNTE_TOKEN;
   if (!token) return;
 
   const body = new URLSearchParams({
     target: phone,
-    message: `Kode OTP aktivasi akun TIA Anda: ${otp}. Berlaku ${OTP_EXPIRES_MINUTES} menit.`,
+    message: `Kode OTP aktivasi akun TIA untuk nomor unit/login ${account.username} (${account.unitNumber}): ${otp}. Berlaku ${OTP_EXPIRES_MINUTES} menit.`,
     countryCode: '62',
   });
 
@@ -118,7 +122,10 @@ export class AccountActivationService {
       },
     });
 
-    await sendOtpViaFonnte(user.phone, otp);
+    await sendOtpViaFonnte(user.phone, otp, {
+      username: user.username,
+      unitNumber,
+    });
 
     return {
       unitNumber,

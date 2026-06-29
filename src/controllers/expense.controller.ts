@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import { expenseService } from '../services/expense.service';
+import { uploadService } from '../services/upload.service';
 import { sendSuccess, sendCreated } from '../utils/response';
 import { buildPaginationMeta } from '../utils/response';
+import { AppError } from '../utils/errors';
 
 export class ExpenseController {
   async create(req: Request, res: Response, next: NextFunction) {
@@ -68,6 +70,24 @@ export class ExpenseController {
   async update(req: Request, res: Response, next: NextFunction) {
     try {
       const expense = await expenseService.update(req.params.id, req.body);
+      sendSuccess(res, expense);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateAttachment(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.file) {
+        throw new AppError(400, 'VALIDATION_ERROR', 'File image wajib diupload pada field "file"');
+      }
+
+      const attachmentUrl = await uploadService.saveFile(
+        req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname,
+      );
+      const expense = await expenseService.updateAttachment(req.params.id, attachmentUrl);
       sendSuccess(res, expense);
     } catch (err) {
       next(err);

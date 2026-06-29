@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import { paymentService } from '../services/payment.service';
+import { uploadService } from '../services/upload.service';
 import { sendSuccess, sendCreated } from '../utils/response';
 import { buildPaginationMeta } from '../utils/response';
+import { AppError } from '../utils/errors';
 
 export class PaymentController {
   async create(req: Request, res: Response, next: NextFunction) {
@@ -80,6 +82,24 @@ export class PaymentController {
   async reject(req: Request, res: Response, next: NextFunction) {
     try {
       const payment = await paymentService.reject(req.params.id, req.user!.userId, req.body.note);
+      sendSuccess(res, payment);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateProofImage(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.file) {
+        throw new AppError(400, 'VALIDATION_ERROR', 'File image wajib diupload pada field "file"');
+      }
+
+      const proofImageUrl = await uploadService.saveFile(
+        req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname,
+      );
+      const payment = await paymentService.updateProofImage(req.params.id, proofImageUrl);
       sendSuccess(res, payment);
     } catch (err) {
       next(err);

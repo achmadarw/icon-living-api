@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { NotFoundError, InvalidStatusError, AppError } from '../utils/errors';
 import { notificationService } from './notification.service';
 import { acquireLedgerLock, getLastLedgerState, rebuildLedgerTailFromOrder } from './ledger.service';
+import { logger } from '../utils/logger';
 import type { CreatePaymentInput, CreateManualPaymentInput, PaymentQuery, ArrearsQuery } from '@tia/shared';
 
 export class PaymentService {
@@ -86,14 +87,19 @@ export class PaymentService {
       },
     });
 
-    // Notify bendahara(s) about new payment - fire and forget
-    notificationService.onPaymentSubmitted({
-      id: payment.id,
-      amount: input.amount,
-      userId,
-      userName: payment.user.name,
-      paymentTypeName: payment.paymentType.name,
-    }).catch(() => {}); // Don't fail payment creation if notification fails
+    try {
+      await notificationService.onPaymentSubmitted({
+        id: payment.id,
+        amount: input.amount,
+        userId,
+        userName: payment.user.name,
+        paymentTypeName: payment.paymentType.name,
+        periods: input.periods,
+      });
+    } catch (err) {
+      // Pembayaran tetap berhasil, tapi kegagalan notifikasi harus terlihat di log.
+      logger.error('Failed to notify bendahara about submitted payment', err);
+    }
 
     return payment;
   }
@@ -265,6 +271,21 @@ export class PaymentService {
 
   async findByUser(userId: string, query: PaymentQuery) {
     return this.findAll({ ...query, userId });
+  }
+
+  async updateProofImage(id: string, proofImageUrl: string) {
+    await this.findById(id);
+
+    return prisma.payment.update({
+      where: { id },
+      data: { proofImageUrl },
+      include: {
+        periods: true,
+        paymentType: true,
+        user: { select: { id: true, name: true, unitNumber: true, username: true } },
+        reviewedBy: { select: { id: true, name: true } },
+      },
+    });
   }
 
   async approve(id: string, reviewerId: string, note?: string) {
