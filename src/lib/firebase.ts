@@ -117,7 +117,7 @@ export async function sendFcmToTokens(
       android: {
         priority: 'high',
         notification: {
-          channelId: 'tia_default',
+          channelId: 'tia_default_channel',
           sound: 'default',
         },
       },

@@ -15,18 +15,16 @@ interface CreateNotificationInput {
 }
 
 /**
- * Fire-and-forget FCM push. Does NOT throw — push failure must never block
- * the underlying business operation (payment/expense/etc).
- *
- * Runs asynchronously: we intentionally do not `await` the caller so the
- * DB transaction + Socket emit return as fast as before.
+ * Best-effort FCM push. Does not throw; push failure must never block the
+ * underlying business operation. The send is awaited so the runtime does not
+ * defer it after the HTTP response has already finished.
  */
-function dispatchPushAsync(
+async function dispatchPush(
   userIds: string[],
   notif: { type: NotificationType; title: string; message: string; referenceId?: string | null; referenceType?: string | null },
-): void {
+): Promise<void> {
   if (!isFirebaseReady() || userIds.length === 0) {
-    console.log('[notification.dispatchPushAsync] ⚠️ SKIPPED', {
+    console.log('[notification.dispatchPush] skipped', {
       firebaseReady: isFirebaseReady(),
       userIdsCount: userIds.length,
       userIds,
@@ -35,58 +33,55 @@ function dispatchPushAsync(
     return;
   }
 
-  console.log('[notification.dispatchPushAsync] 📤 SCHEDULED', {
+  console.log('[notification.dispatchPush] start', {
     userIds,
     notifType: notif.type,
     title: notif.title,
   });
 
-  // Schedule on next tick — never block the current call stack.
-  setImmediate(async () => {
-    try {
-      console.log('[notification.dispatchPushAsync] 🔍 GETTING FCM TOKENS for users:', userIds);
-      const tokens = await fcmTokenService.getTokensForUsers(userIds);
-      
-      console.log('[notification.dispatchPushAsync] 📋 FCM TOKENS RETRIEVED', {
-        userIds,
-        tokensCount: tokens.length,
-        tokens: tokens.slice(0, 3).map(t => `${t.substring(0, 20)}...`), // Log first 3 tokens truncated
-      });
-      
-      if (tokens.length === 0) {
-        console.warn('[notification.dispatchPushAsync] ❌ NO TOKENS FOUND for users:', userIds);
-        return;
-      }
+  try {
+    console.log('[notification.dispatchPush] getting FCM tokens for users:', userIds);
+    const tokens = await fcmTokenService.getTokensForUsers(userIds);
 
-      console.log('[notification.dispatchPushAsync] 🚀 SENDING FCM to', tokens.length, 'token(s)', {
-        notifType: notif.type,
-        title: notif.title,
-      });
-      
-      const { invalidTokens, successCount, failureCount } = await sendFcmToTokens(tokens, {
-        title: notif.title,
-        body: notif.message,
-        data: {
-          type: notif.type,
-          referenceId: notif.referenceId ?? '',
-          referenceType: notif.referenceType ?? '',
-        },
-      });
+    console.log('[notification.dispatchPush] FCM tokens retrieved', {
+      userIds,
+      tokensCount: tokens.length,
+      tokens: tokens.slice(0, 3).map(t => `${t.substring(0, 20)}...`),
+    });
 
-      console.log('[notification.dispatchPushAsync] ✅ FCM SEND COMPLETE', {
-        successCount,
-        failureCount,
-        invalidTokensCount: invalidTokens.length,
-      });
-
-      if (invalidTokens.length > 0) {
-        console.log('[notification.dispatchPushAsync] 🧹 REMOVING', invalidTokens.length, 'invalid tokens');
-        await fcmTokenService.removeInvalidTokens(invalidTokens);
-      }
-    } catch (err) {
-      console.error('[notification.dispatchPushAsync] ❌ FAILED:', err);
+    if (tokens.length === 0) {
+      console.warn('[notification.dispatchPush] no tokens found for users:', userIds);
+      return;
     }
-  });
+
+    console.log('[notification.dispatchPush] sending FCM to', tokens.length, 'token(s)', {
+      notifType: notif.type,
+      title: notif.title,
+    });
+
+    const { invalidTokens, successCount, failureCount } = await sendFcmToTokens(tokens, {
+      title: notif.title,
+      body: notif.message,
+      data: {
+        type: notif.type,
+        referenceId: notif.referenceId ?? '',
+        referenceType: notif.referenceType ?? '',
+      },
+    });
+
+    console.log('[notification.dispatchPush] FCM send complete', {
+      successCount,
+      failureCount,
+      invalidTokensCount: invalidTokens.length,
+    });
+
+    if (invalidTokens.length > 0) {
+      console.log('[notification.dispatchPush] removing', invalidTokens.length, 'invalid tokens');
+      await fcmTokenService.removeInvalidTokens(invalidTokens);
+    }
+  } catch (err) {
+    console.error('[notification.dispatchPush] failed:', err);
+  }
 }
 
 export class NotificationService {
@@ -125,16 +120,15 @@ export class NotificationService {
     emitToUser(input.userId, 'notification:new', notification);
     console.log('[notification.create] ✅ SOCKET EMIT CALLED');
 
-    // Fire-and-forget FCM push
-    console.log('[notification.create] 🔔 DISPATCHING FCM ASYNC');
-    dispatchPushAsync([input.userId], {
+    console.log('[notification.create] 🔔 DISPATCHING FCM');
+    await dispatchPush([input.userId], {
       type: input.type,
       title: input.title,
       message: input.message,
       referenceId: input.referenceId ?? null,
       referenceType: input.referenceType ?? null,
     });
-    console.log('[notification.create] ✅ FCM DISPATCH SCHEDULED (async, fire-and-forget)');
+    console.log('[notification.create] ✅ FCM DISPATCH COMPLETE');
     console.log('========== 📬 NOTIFICATION CREATE END ==========\n\n');
 
     return notification;
@@ -163,10 +157,9 @@ export class NotificationService {
       emitToUser(notif.userId, 'notification:new', notif);
     }
 
-    // Fire-and-forget FCM push — batched per-user list
     if (notifications.length > 0) {
       const first = notifications[0]!;
-      dispatchPushAsync(
+      await dispatchPush(
         notifications.map((n) => n.userId),
         {
           type: first.type,
