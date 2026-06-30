@@ -173,6 +173,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([isActive])
   @@map("users")
 }
 
@@ -431,8 +432,10 @@ model Transaction {
   createdAt DateTime @default(now())
 
   @@index([type])
+  @@index([type, createdAt])
   @@index([ledgerOrder])
   @@index([createdAt])
+  @@index([referenceType, type, createdAt])
   @@index([referenceType, referenceId])
   @@map("transactions")
 }

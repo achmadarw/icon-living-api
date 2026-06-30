@@ -199,16 +199,61 @@ export class TransactionService {
 
   async getCashFlow(year: number) {
     const months = Array.from({ length: 12 }, (_, i) => i + 1);
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year + 1, 0, 1);
 
-    const cashFlow = await Promise.all(
-      months.map(async (month) => {
-        const summary = await this.getSummary(year, month);
-        return {
-          month: `${year}-${String(month).padStart(2, '0')}`,
-          ...summary,
-        };
-      })
-    );
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        createdAt: { gte: startDate, lt: endDate },
+      },
+      select: {
+        type: true,
+        amount: true,
+        referenceType: true,
+        createdAt: true,
+      },
+    });
+
+    const totalsByMonth = new Map<number, {
+      totalIncome: number;
+      totalOtherIncome: number;
+      totalExpense: number;
+    }>();
+
+    for (const tx of transactions) {
+      const month = tx.createdAt.getMonth() + 1;
+      const totals = totalsByMonth.get(month) ?? {
+        totalIncome: 0,
+        totalOtherIncome: 0,
+        totalExpense: 0,
+      };
+      const amount = tx.amount.toNumber();
+
+      if (tx.type === 'INCOME') {
+        totals.totalIncome += amount;
+        if (tx.referenceType === 'OTHER_INCOME') {
+          totals.totalOtherIncome += amount;
+        }
+      } else {
+        totals.totalExpense += amount;
+      }
+
+      totalsByMonth.set(month, totals);
+    }
+
+    const cashFlow = months.map((month) => {
+      const totals = totalsByMonth.get(month) ?? {
+        totalIncome: 0,
+        totalOtherIncome: 0,
+        totalExpense: 0,
+      };
+      return {
+        month: `${year}-${String(month).padStart(2, '0')}`,
+        ...totals,
+        netIncome: totals.totalIncome - totals.totalExpense,
+        period: `${year}-${String(month).padStart(2, '0')}`,
+      };
+    });
 
     return cashFlow;
   }
@@ -298,16 +343,17 @@ export class TransactionService {
   }
 
   async getDashboard() {
-    const balance = await this.getBalance();
-
     const now = new Date();
-    const monthlySummary = await this.getSummary(now.getFullYear(), now.getMonth() + 1);
-
-    const [pendingPayments, pendingExpenses, totalUsers] = await prisma.$transaction([
-      prisma.payment.count({ where: { status: 'PENDING' } }),
-      prisma.expense.count({ where: { status: 'SUBMITTED' } }),
-      prisma.user.count({ where: { isActive: true } }),
+    const [balance, monthlySummary, counts] = await Promise.all([
+      this.getBalance(),
+      this.getSummary(now.getFullYear(), now.getMonth() + 1),
+      prisma.$transaction([
+        prisma.payment.count({ where: { status: 'PENDING' } }),
+        prisma.expense.count({ where: { status: 'SUBMITTED' } }),
+        prisma.user.count({ where: { isActive: true } }),
+      ]),
     ]);
+    const [pendingPayments, pendingExpenses, totalUsers] = counts;
 
     return {
       balance: balance.balance,
