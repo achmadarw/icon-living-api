@@ -17,11 +17,11 @@ router.get('/me', (req, res, next) => userController.findMe(req, res, next));
 router.patch('/me', validate(updateProfileSchema), (req, res, next) => userController.updateProfile(req, res, next));
 router.patch('/me/password', validate(changePasswordSchema), (req, res, next) => userController.changePassword(req, res, next));
 
-// Admin routes (KETUA only)
-router.post('/', authorize('KETUA'), validate(createUserSchema), (req, res, next) => userController.create(req, res, next));
+// Admin routes
+router.post('/', authorize('KETUA', 'BENDAHARA'), validate(createUserSchema), (req, res, next) => userController.create(req, res, next));
 router.get('/', authorize('KETUA', 'BENDAHARA'), validate(paginationSchema, 'query'), (req, res, next) => userController.findAll(req, res, next));
 router.get('/:id', authorize('KETUA', 'BENDAHARA'), validate(idParamSchema, 'params'), (req, res, next) => userController.findById(req, res, next));
-router.patch('/:id', authorize('KETUA'), validate(idParamSchema, 'params'), validate(updateUserSchema), (req, res, next) => userController.update(req, res, next));
+router.patch('/:id', authorize('KETUA', 'BENDAHARA'), validate(idParamSchema, 'params'), validate(updateUserSchema), (req, res, next) => userController.update(req, res, next));
 router.patch('/:id/reset-password', authorize('KETUA'), validate(idParamSchema, 'params'), validate(resetPasswordSchema), (req, res, next) => userController.resetPassword(req, res, next));
 router.patch('/:id/toggle-active', authorize('KETUA'), validate(idParamSchema, 'params'), (req, res, next) => userController.toggleActive(req, res, next));
 

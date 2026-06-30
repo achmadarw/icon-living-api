@@ -11,7 +11,7 @@ router.use(authenticate);
 
 router.post(
   '/',
-  authorize('KETUA'),
+  authorize('KETUA', 'BENDAHARA'),
   validate(createHouseholdSchema),
   (req, res, next) => householdController.create(req, res, next),
 );
@@ -25,7 +25,7 @@ router.get(
 
 router.patch(
   '/:id',
-  authorize('KETUA'),
+  authorize('KETUA', 'BENDAHARA'),
   validate(idParamSchema, 'params'),
   validate(updateHouseholdSchema),
   (req, res, next) => householdController.update(req, res, next),

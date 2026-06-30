@@ -4,10 +4,15 @@ import { sendSuccess, sendCreated, sendNoContent } from '../utils/response';
 import { buildPaginationMeta } from '../utils/response';
 import { PAGINATION } from '@tia/shared';
 import { logger } from '../utils/logger';
+import { ForbiddenError } from '../utils/errors';
 
 export class UserController {
   async create(req: Request, res: Response, next: NextFunction) {
     try {
+      if (req.user!.role === 'BENDAHARA' && req.body.role !== 'WARGA') {
+        throw new ForbiddenError('Bendahara hanya dapat membuat akun warga');
+      }
+
       const user = await userService.create(req.body);
       sendCreated(res, user);
     } catch (err) {
@@ -47,6 +52,13 @@ export class UserController {
 
   async update(req: Request, res: Response, next: NextFunction) {
     try {
+      if (req.user!.role === 'BENDAHARA') {
+        const target = await userService.findById(req.params.id);
+        if (target.role !== 'WARGA' || (req.body.role && req.body.role !== 'WARGA')) {
+          throw new ForbiddenError('Bendahara hanya dapat mengubah data warga');
+        }
+      }
+
       const user = await userService.update(req.params.id, req.body);
       sendSuccess(res, user);
     } catch (err) {
