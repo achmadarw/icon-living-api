@@ -29,6 +29,14 @@ interface CreateOtherIncomeInput {
 }
 
 export class TransactionService {
+  private isIplPaymentType(paymentType: { category?: string | null; isMandatory: boolean; name: string }) {
+    return paymentType.category === 'IPL' || paymentType.isMandatory || paymentType.name.toUpperCase().includes('IPL');
+  }
+
+  private isOtherIncomePaymentType(paymentType: { category?: string | null; isMandatory: boolean; name: string }) {
+    return !this.isIplPaymentType(paymentType);
+  }
+
   async findAll(query: TransactionQuery) {
     const { page = 1, limit = 20, type, year, month, search, sortBy = 'ledgerOrder', sortOrder = 'desc' } = query;
     const skip = (page - 1) * limit;
@@ -78,7 +86,7 @@ export class TransactionService {
           where: { id: { in: paymentReferenceIds } },
           select: {
             id: true,
-            paymentType: { select: { isMandatory: true, name: true } },
+            paymentType: { select: { category: true, isMandatory: true, name: true } },
             user: { select: { id: true, name: true, unitNumber: true } },
           },
         })
@@ -91,7 +99,7 @@ export class TransactionService {
       const payment = paymentMap.get(tx.referenceId);
       if (!payment) return tx;
 
-      const isIplPayment = payment.paymentType.isMandatory || payment.paymentType.name.toUpperCase().includes('IPL');
+      const isIplPayment = this.isIplPaymentType(payment.paymentType);
       if (!isIplPayment) return tx;
 
       return {
@@ -159,20 +167,16 @@ export class TransactionService {
       ? new Date(year, month, 1)
       : new Date(year + 1, 0, 1);
 
-    const [income, otherIncome, expense] = await prisma.$transaction([
-      prisma.transaction.aggregate({
-        _sum: { amount: true },
+    const [incomeTransactions, expense] = await prisma.$transaction([
+      prisma.transaction.findMany({
         where: {
           type: 'INCOME',
           createdAt: { gte: startDate, lt: endDate },
         },
-      }),
-      prisma.transaction.aggregate({
-        _sum: { amount: true },
-        where: {
-          type: 'INCOME',
-          referenceType: 'OTHER_INCOME',
-          createdAt: { gte: startDate, lt: endDate },
+        select: {
+          amount: true,
+          referenceId: true,
+          referenceType: true,
         },
       }),
       prisma.transaction.aggregate({
@@ -184,8 +188,34 @@ export class TransactionService {
       }),
     ]);
 
-    const totalIncome = income._sum.amount?.toNumber() ?? 0;
-    const totalOtherIncome = otherIncome._sum.amount?.toNumber() ?? 0;
+    const paymentReferenceIds = incomeTransactions
+      .filter((tx) => tx.referenceType === 'PAYMENT' && !!tx.referenceId)
+      .map((tx) => tx.referenceId!) as string[];
+    const payments = paymentReferenceIds.length > 0
+      ? await prisma.payment.findMany({
+          where: { id: { in: paymentReferenceIds } },
+          select: {
+            id: true,
+            paymentType: { select: { category: true, isMandatory: true, name: true } },
+          },
+        })
+      : [];
+    const paymentMap = new Map(payments.map((payment) => [payment.id, payment]));
+
+    let totalIncome = 0;
+    let totalOtherIncome = 0;
+    for (const tx of incomeTransactions) {
+      const amount = tx.amount.toNumber();
+      totalIncome += amount;
+      if (tx.referenceType === 'OTHER_INCOME') {
+        totalOtherIncome += amount;
+      } else if (tx.referenceType === 'PAYMENT' && tx.referenceId) {
+        const payment = paymentMap.get(tx.referenceId);
+        if (payment && this.isOtherIncomePaymentType(payment.paymentType)) {
+          totalOtherIncome += amount;
+        }
+      }
+    }
     const totalExpense = expense._sum.amount?.toNumber() ?? 0;
 
     return {
@@ -210,9 +240,24 @@ export class TransactionService {
         type: true,
         amount: true,
         referenceType: true,
+        referenceId: true,
         createdAt: true,
       },
     });
+
+    const paymentReferenceIds = transactions
+      .filter((tx) => tx.type === 'INCOME' && tx.referenceType === 'PAYMENT' && !!tx.referenceId)
+      .map((tx) => tx.referenceId!) as string[];
+    const payments = paymentReferenceIds.length > 0
+      ? await prisma.payment.findMany({
+          where: { id: { in: paymentReferenceIds } },
+          select: {
+            id: true,
+            paymentType: { select: { category: true, isMandatory: true, name: true } },
+          },
+        })
+      : [];
+    const paymentMap = new Map(payments.map((payment) => [payment.id, payment]));
 
     const totalsByMonth = new Map<number, {
       totalIncome: number;
@@ -233,6 +278,11 @@ export class TransactionService {
         totals.totalIncome += amount;
         if (tx.referenceType === 'OTHER_INCOME') {
           totals.totalOtherIncome += amount;
+        } else if (tx.referenceType === 'PAYMENT' && tx.referenceId) {
+          const payment = paymentMap.get(tx.referenceId);
+          if (payment && this.isOtherIncomePaymentType(payment.paymentType)) {
+            totals.totalOtherIncome += amount;
+          }
         }
       } else {
         totals.totalExpense += amount;
@@ -267,6 +317,7 @@ export class TransactionService {
         where: {
           isActive: true,
           OR: [
+            { category: 'IPL' },
             { isMandatory: true },
             { name: { contains: 'IPL', mode: 'insensitive' } },
           ],

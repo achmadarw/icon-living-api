@@ -33,6 +33,12 @@ enum TransactionType {
   EXPENSE
 }
 
+enum PaymentTypeCategory {
+  IPL
+  DONATION
+  OTHER
+}
+
 enum NotificationType {
   PAYMENT_SUBMITTED
   PAYMENT_APPROVED
@@ -87,6 +93,8 @@ model PaymentType {
   fixedAmount Decimal? @db.Decimal(15, 2)
   isMandatory Boolean  @default(false)
   isActive    Boolean  @default(true)
+  category    PaymentTypeCategory @default(IPL)
+  requiresPeriod Boolean @default(true)
 
   payments Payment[]
 

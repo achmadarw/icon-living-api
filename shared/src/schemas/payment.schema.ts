@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 const PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+const periodsSchema = z
+  .array(z.string().regex(PERIOD_REGEX, 'Format periode: YYYY-MM'))
+  .max(12, 'Maksimal 12 periode sekaligus')
+  .default([]);
+
 export const createPaymentSchema = z.object({
   paymentTypeId: z.string().min(1, 'Jenis pembayaran wajib dipilih'),
   amount: z.number().positive('Nominal harus lebih dari 0'),
@@ -10,10 +15,7 @@ export const createPaymentSchema = z.object({
   transferDate: z.string().min(1, 'Tanggal transfer wajib diisi'),
   proofImageUrl: z.string().min(1, 'URL bukti transfer wajib diisi'),
   description: z.string().max(500).optional(),
-  periods: z
-    .array(z.string().regex(PERIOD_REGEX, 'Format periode: YYYY-MM'))
-    .min(1, 'Minimal 1 periode harus dipilih')
-    .max(12, 'Maksimal 12 periode sekaligus'),
+  periods: periodsSchema,
 });
 
 export const createManualPaymentSchema = z.object({
@@ -25,10 +27,7 @@ export const createManualPaymentSchema = z.object({
   transferDate: z.string().min(1, 'Tanggal transfer wajib diisi'),
   proofImageUrl: z.string().url('URL bukti transfer tidak valid').optional(),
   description: z.string().max(500).optional(),
-  periods: z
-    .array(z.string().regex(PERIOD_REGEX, 'Format periode: YYYY-MM'))
-    .min(1, 'Minimal 1 periode harus dipilih')
-    .max(12, 'Maksimal 12 periode sekaligus'),
+  periods: periodsSchema,
 });
 
 export const reviewPaymentSchema = z.object({

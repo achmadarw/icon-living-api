@@ -35,11 +35,13 @@ async function sendOtpViaFonnte(
   account: { username: string; unitNumber: string },
 ): Promise<void> {
   const token = process.env.FONNTE_TOKEN;
-  if (!token) return;
+  if (!token) {
+    throw new ValidationError('Layanan OTP belum dikonfigurasi');
+  }
 
   const body = new URLSearchParams({
     target: phone,
-    message: `Kode OTP aktivasi akun TIA untuk nomor unit/login ${account.username} (${account.unitNumber}): ${otp}. Berlaku ${OTP_EXPIRES_MINUTES} menit.`,
+    message: `Kode OTP aktivasi akun TIA untuk user login ${account.username} (${account.unitNumber}): ${otp}. Berlaku ${OTP_EXPIRES_MINUTES} menit.`,
     countryCode: '62',
   });
 
@@ -105,13 +107,14 @@ export class AccountActivationService {
     });
 
     if (lastOtp?.cooldownUntil && lastOtp.cooldownUntil > now) {
-      throw new RateLimitError();
+      const remainingSeconds = Math.ceil((lastOtp.cooldownUntil.getTime() - now.getTime()) / 1000);
+      throw new RateLimitError(remainingSeconds);
     }
 
     const otp = String(crypto.randomInt(100000, 999999));
     const otpHash = hashText(otp);
 
-    await prisma.accountActivationOtp.create({
+    const createdOtp = await prisma.accountActivationOtp.create({
       data: {
         userId: user.id,
         unitNumber,
@@ -122,10 +125,18 @@ export class AccountActivationService {
       },
     });
 
-    await sendOtpViaFonnte(user.phone, otp, {
-      username: user.username,
-      unitNumber,
-    });
+    try {
+      await sendOtpViaFonnte(user.phone, otp, {
+        username: user.username,
+        unitNumber,
+      });
+    } catch (err) {
+      await prisma.accountActivationOtp.update({
+        where: { id: createdOtp.id },
+        data: { consumedAt: new Date() },
+      });
+      throw err;
+    }
 
     return {
       unitNumber,

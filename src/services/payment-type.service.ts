@@ -11,6 +11,8 @@ export class PaymentTypeService {
         fixedAmount: input.fixedAmount,
         isMandatory: input.isMandatory ?? false,
         isActive: input.isActive ?? true,
+        category: input.category ?? 'IPL',
+        requiresPeriod: input.requiresPeriod ?? true,
       },
     });
   }

@@ -63,8 +63,15 @@ export class InvalidStatusError extends AppError {
 }
 
 export class RateLimitError extends AppError {
-  constructor() {
-    super(429, 'RATE_LIMIT', 'Terlalu banyak request. Coba lagi nanti.');
+  constructor(remainingSeconds?: number) {
+    super(
+      429,
+      'RATE_LIMIT',
+      remainingSeconds
+        ? `Terlalu banyak request. Coba lagi dalam ${remainingSeconds} detik.`
+        : 'Terlalu banyak request. Coba lagi nanti.',
+      remainingSeconds ? { remainingSeconds, retryAfter: remainingSeconds } : undefined,
+    );
   }
 }
 

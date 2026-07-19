@@ -3,6 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.arrearsQuerySchema = exports.paymentQuerySchema = exports.rejectPaymentSchema = exports.reviewPaymentSchema = exports.createManualPaymentSchema = exports.createPaymentSchema = void 0;
 const zod_1 = require("zod");
 const PERIOD_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+const periodsSchema = zod_1.z
+    .array(zod_1.z.string().regex(PERIOD_REGEX, 'Format periode: YYYY-MM'))
+    .max(12, 'Maksimal 12 periode sekaligus')
+    .default([]);
 exports.createPaymentSchema = zod_1.z.object({
     paymentTypeId: zod_1.z.string().min(1, 'Jenis pembayaran wajib dipilih'),
     amount: zod_1.z.number().positive('Nominal harus lebih dari 0'),
@@ -11,10 +15,7 @@ exports.createPaymentSchema = zod_1.z.object({
     transferDate: zod_1.z.string().min(1, 'Tanggal transfer wajib diisi'),
     proofImageUrl: zod_1.z.string().min(1, 'URL bukti transfer wajib diisi'),
     description: zod_1.z.string().max(500).optional(),
-    periods: zod_1.z
-        .array(zod_1.z.string().regex(PERIOD_REGEX, 'Format periode: YYYY-MM'))
-        .min(1, 'Minimal 1 periode harus dipilih')
-        .max(12, 'Maksimal 12 periode sekaligus'),
+    periods: periodsSchema,
 });
 exports.createManualPaymentSchema = zod_1.z.object({
     userId: zod_1.z.string().min(1, 'User wajib dipilih'),
@@ -25,10 +26,7 @@ exports.createManualPaymentSchema = zod_1.z.object({
     transferDate: zod_1.z.string().min(1, 'Tanggal transfer wajib diisi'),
     proofImageUrl: zod_1.z.string().url('URL bukti transfer tidak valid').optional(),
     description: zod_1.z.string().max(500).optional(),
-    periods: zod_1.z
-        .array(zod_1.z.string().regex(PERIOD_REGEX, 'Format periode: YYYY-MM'))
-        .min(1, 'Minimal 1 periode harus dipilih')
-        .max(12, 'Maksimal 12 periode sekaligus'),
+    periods: periodsSchema,
 });
 exports.reviewPaymentSchema = zod_1.z.object({
     note: zod_1.z.string().max(500).optional(),

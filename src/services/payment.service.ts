@@ -7,11 +7,28 @@ import { logger } from '../utils/logger';
 import type { CreatePaymentInput, CreateManualPaymentInput, PaymentQuery, ArrearsQuery } from '@tia/shared';
 
 export class PaymentService {
+  private isIplPaymentType(paymentType: { category?: string | null; isMandatory: boolean; name: string }) {
+    return paymentType.category === 'IPL' || paymentType.isMandatory || paymentType.name.toUpperCase().includes('IPL');
+  }
+
+  private validatePeriods(paymentType: { requiresPeriod?: boolean | null }, periods: string[]) {
+    if ((paymentType.requiresPeriod ?? true) && periods.length === 0) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Minimal 1 periode harus dipilih');
+    }
+  }
+
+  private getExpectedAmount(paymentType: { fixedAmount: { toNumber(): number } | null; requiresPeriod?: boolean | null }, periods: string[]) {
+    if (!paymentType.fixedAmount) return null;
+    const multiplier = (paymentType.requiresPeriod ?? true) ? periods.length : 1;
+    return paymentType.fixedAmount.toNumber() * multiplier;
+  }
+
   private async getIplPaymentTypeIds(requestedPaymentTypeId?: string): Promise<string[]> {
     const iplTypes = await prisma.paymentType.findMany({
       where: {
         isActive: true,
         OR: [
+          { category: 'IPL' },
           { isMandatory: true },
           { name: { contains: 'IPL', mode: 'insensitive' } },
         ],
@@ -38,32 +55,34 @@ export class PaymentService {
     if (!paymentType || !paymentType.isActive) {
       throw new NotFoundError('Jenis pembayaran');
     }
+    this.validatePeriods(paymentType, input.periods);
 
-    // Check duplicate periods for this user + payment type
-    const existingPeriods = await prisma.paymentPeriod.findMany({
-      where: {
-        period: { in: input.periods },
-        payment: {
-          userId,
-          paymentTypeId: input.paymentTypeId,
-          status: { in: ['PENDING', 'APPROVED'] },
+    if ((paymentType.requiresPeriod ?? true) && input.periods.length > 0) {
+      // Check duplicate periods for this user + payment type
+      const existingPeriods = await prisma.paymentPeriod.findMany({
+        where: {
+          period: { in: input.periods },
+          payment: {
+            userId,
+            paymentTypeId: input.paymentTypeId,
+            status: { in: ['PENDING', 'APPROVED'] },
+          },
         },
-      },
-      select: { period: true },
-    });
+        select: { period: true },
+      });
 
-    if (existingPeriods.length > 0) {
-      const dupes = existingPeriods.map((p) => p.period);
-      throw new AppError(409, 'DUPLICATE', `Periode ${dupes.join(', ')} sudah pernah dibayar atau sedang diproses`);
+      if (existingPeriods.length > 0) {
+        const dupes = existingPeriods.map((p) => p.period);
+        throw new AppError(409, 'DUPLICATE', `Periode ${dupes.join(', ')} sudah pernah dibayar atau sedang diproses`);
+      }
     }
 
     // Calculate expected amount for fixed-amount types
-    const expectedAmount = paymentType.fixedAmount
-      ? paymentType.fixedAmount.toNumber() * input.periods.length
-      : null;
+    const expectedAmount = this.getExpectedAmount(paymentType, input.periods);
 
     if (expectedAmount !== null && input.amount !== expectedAmount) {
-      throw new AppError(400, 'VALIDATION_ERROR', `Nominal harus ${expectedAmount} untuk ${input.periods.length} periode`);
+      const suffix = (paymentType.requiresPeriod ?? true) ? ` untuk ${input.periods.length} periode` : '';
+      throw new AppError(400, 'VALIDATION_ERROR', `Nominal harus ${expectedAmount}${suffix}`);
     }
 
     const payment = await prisma.payment.create({
@@ -76,9 +95,9 @@ export class PaymentService {
         description: input.description,
         userId,
         paymentTypeId: input.paymentTypeId,
-        periods: {
-          create: input.periods.map((period) => ({ period })),
-        },
+        ...(input.periods.length > 0
+          ? { periods: { create: input.periods.map((period) => ({ period })) } }
+          : {}),
       },
       include: {
         periods: true,
@@ -149,6 +168,7 @@ export class PaymentService {
     if (!paymentType || !paymentType.isActive) {
       throw new NotFoundError('Jenis pembayaran');
     }
+    this.validatePeriods(paymentType, input.periods);
 
     const user = await prisma.user.findUnique({
       where: { id: input.userId },
@@ -158,27 +178,28 @@ export class PaymentService {
       throw new NotFoundError('Warga');
     }
 
-    const existingPeriods = await prisma.paymentPeriod.findMany({
-      where: {
-        period: { in: input.periods },
-        payment: {
-          userId: input.userId,
-          paymentTypeId: input.paymentTypeId,
-          status: { in: ['PENDING', 'APPROVED'] },
+    if ((paymentType.requiresPeriod ?? true) && input.periods.length > 0) {
+      const existingPeriods = await prisma.paymentPeriod.findMany({
+        where: {
+          period: { in: input.periods },
+          payment: {
+            userId: input.userId,
+            paymentTypeId: input.paymentTypeId,
+            status: { in: ['PENDING', 'APPROVED'] },
+          },
         },
-      },
-      select: { period: true },
-    });
-    if (existingPeriods.length > 0) {
-      const dupes = existingPeriods.map((p) => p.period);
-      throw new AppError(409, 'DUPLICATE', `Periode ${dupes.join(', ')} sudah pernah dibayar atau sedang diproses`);
+        select: { period: true },
+      });
+      if (existingPeriods.length > 0) {
+        const dupes = existingPeriods.map((p) => p.period);
+        throw new AppError(409, 'DUPLICATE', `Periode ${dupes.join(', ')} sudah pernah dibayar atau sedang diproses`);
+      }
     }
 
-    const expectedAmount = paymentType.fixedAmount
-      ? paymentType.fixedAmount.toNumber() * input.periods.length
-      : null;
+    const expectedAmount = this.getExpectedAmount(paymentType, input.periods);
     if (expectedAmount !== null && input.amount !== expectedAmount) {
-      throw new AppError(400, 'VALIDATION_ERROR', `Nominal harus ${expectedAmount} untuk ${input.periods.length} periode`);
+      const suffix = (paymentType.requiresPeriod ?? true) ? ` untuk ${input.periods.length} periode` : '';
+      throw new AppError(400, 'VALIDATION_ERROR', `Nominal harus ${expectedAmount}${suffix}`);
     }
 
     const transferDate = new Date(input.transferDate);
@@ -201,9 +222,9 @@ export class PaymentService {
           reviewedById: reviewerId,
           reviewedAt: new Date(),
           reviewNote: 'Disetujui otomatis: input manual pengurus',
-          periods: {
-            create: input.periods.map((period) => ({ period })),
-          },
+          ...(input.periods.length > 0
+            ? { periods: { create: input.periods.map((period) => ({ period })) } }
+            : {}),
         },
         include: {
           periods: true,
@@ -213,18 +234,26 @@ export class PaymentService {
       });
 
       let currentBalance = ledgerState.balance;
-      const amountPerPeriod = payment.amount.toNumber() / payment.periods.length;
+      const ledgerEntries = payment.periods.length > 0
+        ? payment.periods.map((period) => ({
+            amount: payment.amount.toNumber() / payment.periods.length,
+            description: `Pembayaran ${payment.paymentType.name} periode ${period.period} (manual)`,
+          }))
+        : [{
+            amount: payment.amount.toNumber(),
+            description: `Pembayaran ${payment.paymentType.name} (manual)`,
+          }];
       let firstInsertedOrder: bigint | null = null;
 
-      for (const period of payment.periods) {
+      for (const entry of ledgerEntries) {
         const balanceBefore = currentBalance;
-        const balanceAfter = currentBalance + amountPerPeriod;
+        const balanceAfter = currentBalance + entry.amount;
 
         const createdTx = await tx.transaction.create({
           data: {
             type: 'INCOME',
-            amount: amountPerPeriod,
-            description: `Pembayaran ${payment.paymentType.name} periode ${period.period} (manual)`,
+            amount: entry.amount,
+            description: entry.description,
             balanceBefore,
             balanceAfter,
             referenceId: payment.id,
@@ -300,18 +329,26 @@ export class PaymentService {
       await acquireLedgerLock(tx);
       const ledgerState = await getLastLedgerState(tx);
       let currentBalance = ledgerState.balance;
-      const amountPerPeriod = payment.amount.toNumber() / payment.periods.length;
+      const ledgerEntries = payment.periods.length > 0
+        ? payment.periods.map((period) => ({
+            amount: payment.amount.toNumber() / payment.periods.length,
+            description: `Pembayaran ${payment.paymentType.name} periode ${period.period}`,
+          }))
+        : [{
+            amount: payment.amount.toNumber(),
+            description: `Pembayaran ${payment.paymentType.name}`,
+          }];
       let firstInsertedOrder: bigint | null = null;
 
-      for (const period of payment.periods) {
+      for (const entry of ledgerEntries) {
         const balanceBefore = currentBalance;
-        const balanceAfter = currentBalance + amountPerPeriod;
+        const balanceAfter = currentBalance + entry.amount;
 
         const createdTx = await tx.transaction.create({
           data: {
             type: 'INCOME',
-            amount: amountPerPeriod,
-            description: `Pembayaran ${payment.paymentType.name} periode ${period.period}`,
+            amount: entry.amount,
+            description: entry.description,
             balanceBefore,
             balanceAfter,
             referenceId: payment.id,

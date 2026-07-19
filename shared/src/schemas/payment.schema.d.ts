@@ -7,7 +7,7 @@ export declare const createPaymentSchema: z.ZodObject<{
     transferDate: z.ZodString;
     proofImageUrl: z.ZodString;
     description: z.ZodOptional<z.ZodString>;
-    periods: z.ZodArray<z.ZodString, "many">;
+    periods: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
 }, "strip", z.ZodTypeAny, {
     paymentTypeId: string;
     amount: number;
@@ -23,9 +23,9 @@ export declare const createPaymentSchema: z.ZodObject<{
     bankName: string;
     transferDate: string;
     proofImageUrl: string;
-    periods: string[];
     description?: string | undefined;
     accountName?: string | undefined;
+    periods?: string[] | undefined;
 }>;
 export declare const createManualPaymentSchema: z.ZodObject<{
     userId: z.ZodString;
@@ -36,7 +36,7 @@ export declare const createManualPaymentSchema: z.ZodObject<{
     transferDate: z.ZodString;
     proofImageUrl: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodString>;
-    periods: z.ZodArray<z.ZodString, "many">;
+    periods: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
 }, "strip", z.ZodTypeAny, {
     paymentTypeId: string;
     amount: number;
@@ -52,11 +52,11 @@ export declare const createManualPaymentSchema: z.ZodObject<{
     amount: number;
     bankName: string;
     transferDate: string;
-    periods: string[];
     userId: string;
     description?: string | undefined;
     accountName?: string | undefined;
     proofImageUrl?: string | undefined;
+    periods?: string[] | undefined;
 }>;
 export declare const reviewPaymentSchema: z.ZodObject<{
     note: z.ZodOptional<z.ZodString>;
