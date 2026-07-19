@@ -12,10 +12,12 @@ import notificationRoutes from './notification.routes';
 import reportRoutes from './report.routes';
 import budgetRoutes from './budget.routes';
 import householdRoutes from './household.routes';
+import appVersionRoutes from './app-version.routes';
 
 const router: RouterType = Router();
 
 router.use(healthRoutes);
+router.use(appVersionRoutes);
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/payment-types', paymentTypeRoutes);
