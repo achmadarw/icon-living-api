@@ -72,7 +72,7 @@ export class UserService {
         select: {
           id: true, name: true, username: true, phone: true,
           role: true, address: true, unitNumber: true, avatarUrl: true,
-          isActive: true, createdAt: true, updatedAt: true,
+          isActive: true, isActivated: true, activatedAt: true, createdAt: true, updatedAt: true,
           householdId: true,
         },
       }),
@@ -88,7 +88,7 @@ export class UserService {
       select: {
         id: true, name: true, username: true, phone: true,
         role: true, address: true, unitNumber: true, avatarUrl: true,
-        isActive: true, createdAt: true, updatedAt: true,
+        isActive: true, isActivated: true, activatedAt: true, createdAt: true, updatedAt: true,
         householdId: true,
         household: {
           select: {
@@ -192,7 +192,7 @@ export class UserService {
       select: {
         id: true, name: true, username: true, phone: true,
         role: true, address: true, unitNumber: true, avatarUrl: true,
-        isActive: true, createdAt: true, updatedAt: true,
+        isActive: true, isActivated: true, activatedAt: true, createdAt: true, updatedAt: true,
         householdId: true,
       },
     });
@@ -207,7 +207,7 @@ export class UserService {
       select: {
         id: true, name: true, username: true, phone: true,
         role: true, address: true, unitNumber: true, avatarUrl: true,
-        isActive: true, createdAt: true, updatedAt: true,
+        isActive: true, isActivated: true, activatedAt: true, createdAt: true, updatedAt: true,
       },
     });
 
@@ -265,7 +265,7 @@ export class UserService {
       select: {
         id: true, name: true, username: true, phone: true,
         role: true, address: true, unitNumber: true, avatarUrl: true,
-        isActive: true, createdAt: true, updatedAt: true,
+        isActive: true, isActivated: true, activatedAt: true, createdAt: true, updatedAt: true,
       },
     });
 

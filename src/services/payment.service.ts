@@ -2,6 +2,7 @@
 import { prisma } from '../lib/prisma';
 import { NotFoundError, InvalidStatusError, AppError } from '../utils/errors';
 import { notificationService } from './notification.service';
+import { arrearsReminderService } from './arrears-reminder.service';
 import { acquireLedgerLock, getLastLedgerState, rebuildLedgerTailFromOrder } from './ledger.service';
 import { logger } from '../utils/logger';
 import type { CreatePaymentInput, CreateManualPaymentInput, PaymentQuery, ArrearsQuery } from '@tia/shared';
@@ -277,6 +278,9 @@ export class PaymentService {
       return payment;
     });
 
+    // Auto-pulih layanan sampah bila tunggakan sudah lunas - fire and forget
+    arrearsReminderService.reconcileSuspension(input.userId).catch(() => {});
+
     return created;
   }
 
@@ -394,6 +398,9 @@ export class PaymentService {
       paymentTypeName: result.paymentType.name,
       amount: result.amount.toNumber(),
     }).catch(() => {});
+
+    // Auto-pulih layanan sampah bila tunggakan sudah lunas - fire and forget
+    arrearsReminderService.reconcileSuspension(result.user.id).catch(() => {});
 
     return result;
   }

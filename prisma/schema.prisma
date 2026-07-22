@@ -48,6 +48,9 @@ enum NotificationType {
   EXPENSE_REJECTED
   EXPENSE_AUTO_APPROVED
   USER_CREATED
+  ARREARS_WARNING
+  WASTE_SUSPENSION_WARNING
+  WASTE_SERVICE_RESTORED
 }
 
 enum DevicePlatform {
@@ -148,6 +151,35 @@ model CategoryBudget {
   @@unique([categoryId, year])
   @@index([year])
   @@map("category_budgets")
+}
+
+enum MessageTemplateCategory {
+  PENGUMUMAN
+  TAGIHAN
+  UPDATE_APLIKASI
+  ACARA
+  LAINNYA
+}
+
+// Template pesan WhatsApp yang tersimpan & bisa dipakai ulang saat broadcast.
+// Terpisah dari proses pengiriman: template = konten reusable, broadcast = eksekusi.
+model MessageTemplate {
+  id            String                  @id @default(cuid())
+  name          String
+  category      MessageTemplateCategory @default(PENGUMUMAN)
+  body          String
+  // Daftar variabel custom yang dipakai template: [{ token, label, description }].
+  variables     Json?
+  // Penanda template bawaan sistem (mis. ARREARS_WARNING) agar idempoten & unik.
+  systemKey     String?                 @unique
+  createdById   String?
+  createdByName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@map("message_templates")
 }
 
 
@@ -468,6 +500,79 @@ model Notification {
   @@index([userId, isRead])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+// ─── Penagihan & Sanksi ─────────────────────────────────
+
+// Catatan penghentian pengangkutan sampah untuk unit yang menunggak
+// 2 bulan berturut-turut. Aktif sampai warga melunasi (auto-lift di Fase 2).
+model WasteSuspension {
+  id           String    @id @default(cuid())
+  userId       String
+  userName     String
+  unitNumber   String?
+  startPeriod  String // bulan berlaku, "YYYY-MM"
+  reason       String?
+  isActive     Boolean   @default(true)
+  liftedAt     DateTime?
+  liftedReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([userId])
+  @@map("waste_suspensions")
+}
+
+// Pengaturan singleton fitur penagihan otomatis (on/off + template pesan).
+model ArrearsSetting {
+  id                   String   @id @default("singleton")
+  enabled              Boolean  @default(true)
+  warningTemplateId    String?
+  suspensionTemplateId String?
+  updatedAt            DateTime @updatedAt
+
+  @@map("arrears_settings")
+}
+
+// Log idempotency: mencegah peringatan tunggakan dobel untuk
+// (warga, periode, tingkat) yang sama dalam satu bulan.
+model ArrearsReminderLog {
+  id       String   @id @default(cuid())
+  userId   String
+  period   String // bulan yang dievaluasi, "YYYY-MM"
+  level    String // "WARNING" | "SUSPENSION"
+  sentAt   DateTime @default(now())
+
+  @@unique([userId, period, level])
+  @@index([period])
+  @@map("arrears_reminder_logs")
+}
+
+// Pelacakan status pengiriman WhatsApp per pesan (delivery report dari Fonnte).
+model WhatsappDelivery {
+  id           String   @id @default(cuid())
+  fonnteId     String? // message id dari Fonnte (untuk dicocokkan webhook)
+  stateId      String?
+  target       String // nomor tujuan (dinormalisasi)
+  userId       String?
+  name         String?
+  unitNumber   String?
+  source       String // BROADCAST | ARREARS_WARNING | ARREARS_SUSPENSION | WASTE_RESTORED
+  batchId      String? // pengelompokan satu kali broadcast
+  status       String   @default("SENT") // PENDING | SENT | DELIVERED | READ | FAILED
+  fonnteStatus String?
+  fonnteState  String?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([batchId])
+  @@index([fonnteId])
+  @@index([source, createdAt])
+  @@map("whatsapp_deliveries")
 }
 
 // ─── Audit ──────────────────────────────────────────────

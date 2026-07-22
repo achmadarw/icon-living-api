@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
 import { UnauthorizedError, ValidationError, RateLimitError } from '../utils/errors';
+import { whatsappService } from './whatsapp.service';
 
 const OTP_EXPIRES_MINUTES = 5;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
@@ -34,27 +35,12 @@ async function sendOtpViaFonnte(
   otp: string,
   account: { username: string; unitNumber: string },
 ): Promise<void> {
-  const token = process.env.FONNTE_TOKEN;
-  if (!token) {
-    throw new ValidationError('Layanan OTP belum dikonfigurasi');
-  }
-
-  const body = new URLSearchParams({
+  const result = await whatsappService.send({
     target: phone,
     message: `Kode OTP aktivasi akun TIA untuk user login ${account.username} (${account.unitNumber}): ${otp}. Berlaku ${OTP_EXPIRES_MINUTES} menit.`,
-    countryCode: '62',
   });
 
-  const resp = await fetch('https://api.fonnte.com/send', {
-    method: 'POST',
-    headers: {
-      Authorization: token,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body,
-  });
-
-  if (!resp.ok) {
+  if (!result.success) {
     throw new ValidationError('Gagal mengirim OTP ke WhatsApp');
   }
 }

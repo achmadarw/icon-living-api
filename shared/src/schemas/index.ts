@@ -82,6 +82,17 @@ export { notificationQuerySchema } from './notification.schema';
 export type { NotificationQuery } from './notification.schema';
 
 export {
+  templateVariableSchema,
+  createMessageTemplateSchema,
+  updateMessageTemplateSchema,
+} from './message-template.schema';
+export type {
+  TemplateVariable,
+  CreateMessageTemplateInput,
+  UpdateMessageTemplateInput,
+} from './message-template.schema';
+
+export {
   createBudgetSchema,
   updateBudgetSchema,
   budgetQuerySchema,

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index.ts",
-    "build": "npm --prefix shared run build && tsc && node scripts/copy-shared-runtime.cjs",
+    "build": "npm --prefix shared run build && prisma generate && tsc && node scripts/copy-shared-runtime.cjs",
     "start": "node dist/src/index.js",
     "start:railway": "prisma migrate deploy && node dist/src/index.js",
     "test": "vitest run",

@@ -2,6 +2,12 @@ import { prisma } from '../lib/prisma';
 import { emitToUser, emitToRole } from '../lib/socket';
 import { sendFcmToTokens, isFirebaseReady } from '../lib/firebase';
 import { fcmTokenService } from './fcm-token.service';
+import { config } from '../config';
+import { whatsappService } from './whatsapp.service';
+import { whatsappDeliveryService } from './whatsapp-delivery.service';
+import { resolveDelayRange, nextDelayMs, sleep } from '../utils/wa-throttle';
+import { randomUUID } from 'node:crypto';
+import { ValidationError } from '../utils/errors';
 import type { NotificationType } from '@prisma/client';
 import type { NotificationQuery } from '@tia/shared';
 
@@ -85,6 +91,125 @@ async function dispatchPush(
 }
 
 export class NotificationService {
+  private renderWhatsappTemplate(
+    template: string,
+    user: { name: string; unitNumber: string | null },
+  ) {
+    return template
+      .replace(/\{name\}/g, user.name)
+      .replace(/\{unitNumber\}/g, user.unitNumber ?? '-')
+      .replace(/\{playStoreUrl\}/g, config.mobile.android.playStoreUrl);
+  }
+
+  async broadcastWhatsapp(input: {
+    userIds: string[];
+    message: string;
+    delayMinMs?: number | null;
+    delayMaxMs?: number | null;
+  }) {
+    const uniqueUserIds = [...new Set(input.userIds)];
+    if (uniqueUserIds.length === 0) {
+      throw new ValidationError('Pilih minimal 1 penerima');
+    }
+
+    const message = input.message.trim();
+    if (!message) {
+      throw new ValidationError('Pesan WhatsApp wajib diisi');
+    }
+
+    // Jeda acak antar pesan untuk mencegah nomor Fonnte diblokir.
+    const delayRange = resolveDelayRange({ minMs: input.delayMinMs, maxMs: input.delayMaxMs });
+
+    const users = await prisma.user.findMany({
+      where: {
+        id: { in: uniqueUserIds },
+      },
+      select: {
+        id: true,
+        name: true,
+        unitNumber: true,
+        role: true,
+        isActive: true,
+        isActivated: true,
+        phone: true,
+      },
+      orderBy: { unitNumber: 'asc' },
+    });
+
+    const userById = new Map(users.map((user) => [user.id, user]));
+    const notFoundUserIds = uniqueUserIds.filter((id) => !userById.has(id));
+    const skippedNoPhone: Array<{ id: string; name: string; unitNumber: string | null }> = [];
+    const sent: Array<{ id: string; name: string; unitNumber: string | null }> = [];
+    const failed: Array<{ id: string; name: string; unitNumber: string | null; error: string }> = [];
+
+    // ID untuk mengelompokkan pengiriman ini (dipakai melacak status kirim).
+    const batchId = randomUUID();
+    let dispatched = 0;
+
+    for (const user of users) {
+      if (!user.phone) {
+        skippedNoPhone.push({
+          id: user.id,
+          name: user.name,
+          unitNumber: user.unitNumber,
+        });
+        continue;
+      }
+
+      // Sisipkan jeda sebelum pesan ke-2 dan seterusnya (tidak sebelum yang pertama).
+      if (dispatched > 0) {
+        await sleep(nextDelayMs(delayRange));
+      }
+      dispatched += 1;
+
+      const result = await whatsappService.send({
+        target: user.phone,
+        message: this.renderWhatsappTemplate(message, user),
+      });
+
+      await whatsappDeliveryService.record({
+        fonnteId: result.fonnteId ?? null,
+        target: user.phone,
+        userId: user.id,
+        name: user.name,
+        unitNumber: user.unitNumber,
+        source: 'BROADCAST',
+        batchId,
+        status: result.success ? 'SENT' : 'FAILED',
+        errorMessage: result.success ? null : (result.error ?? 'Gagal mengirim WhatsApp'),
+      });
+
+      if (result.success) {
+        sent.push({
+          id: user.id,
+          name: user.name,
+          unitNumber: user.unitNumber,
+        });
+      } else {
+        failed.push({
+          id: user.id,
+          name: user.name,
+          unitNumber: user.unitNumber,
+          error: result.error ?? 'Gagal mengirim WhatsApp',
+        });
+      }
+    }
+
+    return {
+      batchId,
+      requestedCount: uniqueUserIds.length,
+      eligibleCount: users.length,
+      sentCount: sent.length,
+      failedCount: failed.length,
+      skippedNoPhoneCount: skippedNoPhone.length,
+      notFoundCount: notFoundUserIds.length,
+      sent,
+      failed,
+      skippedNoPhone,
+      notFoundUserIds,
+    };
+  }
+
   async create(input: CreateNotificationInput) {
     console.log('\n\n========== 📬 NOTIFICATION CREATE START ==========');
     console.log('[notification.create] 📝 INPUT', {

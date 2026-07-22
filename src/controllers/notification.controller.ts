@@ -3,6 +3,26 @@ import { notificationService } from '../services/notification.service';
 import { sendSuccess, buildPaginationMeta } from '../utils/response';
 
 export class NotificationController {
+  async broadcastWhatsapp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const body = req.body as {
+        userIds: string[];
+        message: string;
+        delayMinSec?: number;
+        delayMaxSec?: number;
+      };
+      const result = await notificationService.broadcastWhatsapp({
+        userIds: body.userIds,
+        message: body.message,
+        delayMinMs: body.delayMinSec != null ? body.delayMinSec * 1000 : null,
+        delayMaxMs: body.delayMaxSec != null ? body.delayMaxSec * 1000 : null,
+      });
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async findAll(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.userId;
