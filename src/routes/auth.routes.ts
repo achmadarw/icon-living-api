@@ -11,7 +11,11 @@ import {
 } from '@tia/shared';
 import {
   activationUnitsQuerySchema,
+  forgotPasswordUnitsQuerySchema,
+  requestForgotPasswordOtpSchema,
+  resetForgotPasswordSchema,
   requestActivationOtpSchema,
+  verifyForgotPasswordOtpSchema,
   verifyActivationOtpSchema,
   setActivationPasswordSchema,
 } from '../../shared/src/schemas/auth.schema';
@@ -25,6 +29,10 @@ router.get('/activation/units', validate(activationUnitsQuerySchema, 'query'), (
 router.post('/activation/request-otp', validate(requestActivationOtpSchema), (req, res, next) => authController.requestActivationOtp(req, res, next));
 router.post('/activation/verify-otp', validate(verifyActivationOtpSchema), (req, res, next) => authController.verifyActivationOtp(req, res, next));
 router.post('/activation/set-password', validate(setActivationPasswordSchema), (req, res, next) => authController.setActivationPassword(req, res, next));
+router.get('/forgot-password/units', validate(forgotPasswordUnitsQuerySchema, 'query'), (req, res, next) => authController.forgotPasswordUnits(req, res, next));
+router.post('/forgot-password/request-otp', validate(requestForgotPasswordOtpSchema), (req, res, next) => authController.requestForgotPasswordOtp(req, res, next));
+router.post('/forgot-password/verify-otp', validate(verifyForgotPasswordOtpSchema), (req, res, next) => authController.verifyForgotPasswordOtp(req, res, next));
+router.post('/forgot-password/reset-password', validate(resetForgotPasswordSchema), (req, res, next) => authController.resetForgotPassword(req, res, next));
 
 // ─── FCM Device Token (Push Notification) ────────────────
 router.post(

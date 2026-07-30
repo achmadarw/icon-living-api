@@ -125,6 +125,51 @@ export class AuthController {
       next(err);
     }
   }
+
+  async forgotPasswordUnits(req: Request, res: Response, next: NextFunction) {
+    try {
+      const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+      const rows = await accountActivationService.listActivatedUnits(q);
+      sendSuccess(res, rows);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async requestForgotPasswordOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await accountActivationService.requestForgotPasswordOtp(req.body.unitNumber);
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async verifyForgotPasswordOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await accountActivationService.verifyOtp(req.body.unitNumber, req.body.otp);
+      sendSuccess(res, {
+        unitNumber: result.unitNumber,
+        resetToken: result.activationToken,
+        expiresInSeconds: result.expiresInSeconds,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async resetForgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await accountActivationService.resetPassword(
+        req.body.unitNumber,
+        req.body.resetToken,
+        req.body.password,
+      );
+      sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const authController = new AuthController();

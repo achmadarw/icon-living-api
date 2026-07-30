@@ -44,6 +44,18 @@ export const setActivationPasswordSchema = z.object({
   password: z.string().min(8, 'Password minimal 8 karakter'),
 });
 
+export const forgotPasswordUnitsQuerySchema = activationUnitsQuerySchema;
+
+export const requestForgotPasswordOtpSchema = requestActivationOtpSchema;
+
+export const verifyForgotPasswordOtpSchema = verifyActivationOtpSchema;
+
+export const resetForgotPasswordSchema = z.object({
+  unitNumber: z.string().min(2, 'Nomor rumah diperlukan'),
+  resetToken: z.string().min(10, 'Reset token tidak valid'),
+  password: z.string().min(8, 'Password minimal 8 karakter'),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
 export type FcmTokenInput = z.infer<typeof fcmTokenSchema>;
@@ -52,3 +64,7 @@ export type ActivationUnitsQuery = z.infer<typeof activationUnitsQuerySchema>;
 export type RequestActivationOtpInput = z.infer<typeof requestActivationOtpSchema>;
 export type VerifyActivationOtpInput = z.infer<typeof verifyActivationOtpSchema>;
 export type SetActivationPasswordInput = z.infer<typeof setActivationPasswordSchema>;
+export type ForgotPasswordUnitsQuery = z.infer<typeof forgotPasswordUnitsQuerySchema>;
+export type RequestForgotPasswordOtpInput = z.infer<typeof requestForgotPasswordOtpSchema>;
+export type VerifyForgotPasswordOtpInput = z.infer<typeof verifyForgotPasswordOtpSchema>;
+export type ResetForgotPasswordInput = z.infer<typeof resetForgotPasswordSchema>;

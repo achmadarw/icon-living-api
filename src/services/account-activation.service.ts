@@ -34,10 +34,16 @@ async function sendOtpViaFonnte(
   phone: string,
   otp: string,
   account: { username: string; unitNumber: string },
+  purpose: 'activation' | 'forgot-password' = 'activation',
 ): Promise<void> {
+  const message =
+    purpose === 'forgot-password'
+      ? `Kode OTP lupa password Icon Living untuk user login ${account.username} (${account.unitNumber}): ${otp}. Berlaku ${OTP_EXPIRES_MINUTES} menit. Abaikan jika Anda tidak meminta reset password.`
+      : `Kode OTP aktivasi akun TIA untuk user login ${account.username} (${account.unitNumber}): ${otp}. Berlaku ${OTP_EXPIRES_MINUTES} menit.`;
+
   const result = await whatsappService.send({
     target: phone,
-    message: `Kode OTP aktivasi akun TIA untuk user login ${account.username} (${account.unitNumber}): ${otp}. Berlaku ${OTP_EXPIRES_MINUTES} menit.`,
+    message,
   });
 
   if (!result.success) {
@@ -51,6 +57,34 @@ export class AccountActivationService {
       where: {
         isActive: true,
         isActivated: false,
+        unitNumber: {
+          not: null,
+          ...(query ? { contains: query.toUpperCase() } : {}),
+        },
+      },
+      select: {
+        unitNumber: true,
+        username: true,
+        phone: true,
+      },
+      orderBy: { unitNumber: 'asc' },
+      take: 200,
+    });
+
+    return rows
+      .filter((row) => (row.unitNumber ?? '').length > 0)
+      .map((row) => ({
+        unitNumber: row.unitNumber ?? '',
+        username: row.username,
+        maskedPhone: maskPhone(row.phone),
+      }));
+  }
+
+  async listActivatedUnits(query?: string) {
+    const rows = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        isActivated: true,
         unitNumber: {
           not: null,
           ...(query ? { contains: query.toUpperCase() } : {}),
@@ -116,6 +150,69 @@ export class AccountActivationService {
         username: user.username,
         unitNumber,
       });
+    } catch (err) {
+      await prisma.accountActivationOtp.update({
+        where: { id: createdOtp.id },
+        data: { consumedAt: new Date() },
+      });
+      throw err;
+    }
+
+    return {
+      unitNumber,
+      username: user.username,
+      maskedPhone: maskPhone(user.phone),
+      expiresInSeconds: OTP_EXPIRES_MINUTES * 60,
+    };
+  }
+
+  async requestForgotPasswordOtp(unitNumberRaw: string) {
+    const unitNumber = normalizeUnitNumber(unitNumberRaw);
+    const user = await prisma.user.findFirst({
+      where: {
+        isActive: true,
+        isActivated: true,
+        OR: [{ unitNumber }, { unitNumber: legacyUnitNumber(unitNumber) }],
+      },
+    });
+    if (!user) throw new ValidationError('Data nomor rumah tidak ditemukan atau belum aktif');
+    if (!user.phone) throw new ValidationError('Nomor HP belum terdaftar untuk akun ini');
+
+    const now = new Date();
+    const lastOtp = await prisma.accountActivationOtp.findFirst({
+      where: { userId: user.id, consumedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (lastOtp?.cooldownUntil && lastOtp.cooldownUntil > now) {
+      const remainingSeconds = Math.ceil((lastOtp.cooldownUntil.getTime() - now.getTime()) / 1000);
+      throw new RateLimitError(remainingSeconds);
+    }
+
+    const otp = String(crypto.randomInt(100000, 999999));
+    const otpHash = hashText(otp);
+
+    const createdOtp = await prisma.accountActivationOtp.create({
+      data: {
+        userId: user.id,
+        unitNumber,
+        otpHash,
+        expiresAt: new Date(now.getTime() + OTP_EXPIRES_MINUTES * 60 * 1000),
+        cooldownUntil: new Date(now.getTime() + OTP_RESEND_COOLDOWN_SECONDS * 1000),
+        resendCount: (lastOtp?.resendCount ?? 0) + 1,
+      },
+    });
+
+    try {
+      await sendOtpViaFonnte(
+        user.phone,
+        otp,
+        {
+          username: user.username,
+          unitNumber,
+        },
+        'forgot-password',
+      );
     } catch (err) {
       await prisma.accountActivationOtp.update({
         where: { id: createdOtp.id },
@@ -205,6 +302,45 @@ export class AccountActivationService {
           isActivated: true,
           activatedAt: now,
         },
+      }),
+      prisma.accountActivationOtp.updateMany({
+        where: { userId: record.userId, consumedAt: null },
+        data: { consumedAt: now },
+      }),
+    ]);
+
+    return { success: true, username: record.user.username };
+  }
+
+  async resetPassword(unitNumberRaw: string, resetToken: string, password: string) {
+    const unitNumber = normalizeUnitNumber(unitNumberRaw);
+    const now = new Date();
+    const tokenHash = hashText(resetToken);
+
+    const record = await prisma.accountActivationOtp.findFirst({
+      where: {
+        unitNumber,
+        consumedAt: null,
+        activationTokenHash: tokenHash,
+        user: {
+          isActive: true,
+          isActivated: true,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { user: true },
+    });
+
+    if (!record || !record.activationTokenExpiresAt || record.activationTokenExpiresAt < now) {
+      throw new UnauthorizedError('Sesi lupa password tidak valid atau kadaluarsa');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: record.userId },
+        data: { passwordHash },
       }),
       prisma.accountActivationOtp.updateMany({
         where: { userId: record.userId, consumedAt: null },
