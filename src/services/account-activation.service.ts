@@ -38,8 +38,8 @@ async function sendOtpViaFonnte(
 ): Promise<void> {
   const message =
     purpose === 'forgot-password'
-      ? `Kode OTP lupa password Icon Living untuk user login ${account.username} (${account.unitNumber}): ${otp}. Berlaku ${OTP_EXPIRES_MINUTES} menit. Abaikan jika Anda tidak meminta reset password.`
-      : `Kode OTP aktivasi akun TIA untuk user login ${account.username} (${account.unitNumber}): ${otp}. Berlaku ${OTP_EXPIRES_MINUTES} menit.`;
+      ? `Kode OTP lupa password Icon Living untuk user login ${account.username} (${account.unitNumber}): ${otp}.\nUser login Anda adalah ${account.username}.\nBerlaku ${OTP_EXPIRES_MINUTES} menit.\n.`
+      : `Kode OTP aktivasi akun TIA untuk user login ${account.username} (${account.unitNumber}): ${otp}.\nUser login Anda adalah ${account.username}.\nBerlaku ${OTP_EXPIRES_MINUTES} menit.`;
 
   const result = await whatsappService.send({
     target: phone,
