@@ -7,6 +7,21 @@ import type { CreateUserInput, UpdateUserInput, UpdateProfileInput, ChangePasswo
 import { logger } from '../utils/logger';
 
 export class UserService {
+  private async validateIplPaymentType(id?: string | null) {
+    if (!id) return;
+    const paymentType = await prisma.paymentType.findFirst({
+      where: {
+        id,
+        isActive: true,
+        category: 'IPL',
+      },
+      select: { id: true },
+    });
+    if (!paymentType) {
+      throw new NotFoundError('Jenis IPL');
+    }
+  }
+
   private async findHouseholdIdByUnit(unitNumber?: string | null) {
     const normalizedUnit = unitNumber?.trim();
     if (!normalizedUnit) return null;
@@ -17,6 +32,28 @@ export class UserService {
     });
 
     return household?.id ?? null;
+  }
+
+  private async ensureHouseholdForUnit(
+    unitNumber?: string | null,
+    iplPaymentTypeId?: string | null,
+    updateIplPaymentType = false,
+  ) {
+    const normalizedUnit = unitNumber?.trim();
+    if (!normalizedUnit) return null;
+    await this.validateIplPaymentType(iplPaymentTypeId);
+
+    const household = await prisma.household.upsert({
+      where: { unitNumber: normalizedUnit },
+      create: {
+        unitNumber: normalizedUnit,
+        iplPaymentTypeId: updateIplPaymentType ? iplPaymentTypeId ?? null : null,
+      },
+      update: updateIplPaymentType ? { iplPaymentTypeId: iplPaymentTypeId ?? null } : {},
+      select: { id: true },
+    });
+
+    return household.id;
   }
 
   async create(input: CreateUserInput) {
@@ -38,7 +75,9 @@ export class UserService {
 
     const passwordHash = await bcrypt.hash(input.password, AUTH.BCRYPT_ROUNDS);
 
-    const householdId = await this.findHouseholdIdByUnit(input.unitNumber);
+    const householdId = input.iplPaymentTypeId
+      ? await this.ensureHouseholdForUnit(input.unitNumber, input.iplPaymentTypeId, true)
+      : await this.findHouseholdIdByUnit(input.unitNumber);
 
     const user = await prisma.user.create({
       data: {
@@ -51,14 +90,24 @@ export class UserService {
         householdId,
         passwordHash,
       },
+      select: {
+        id: true, name: true, username: true, phone: true,
+        role: true, address: true, unitNumber: true, avatarUrl: true,
+        isActive: true, isActivated: true, activatedAt: true, createdAt: true, updatedAt: true,
+        householdId: true,
+        household: {
+          select: {
+            iplPaymentTypeId: true,
+            iplPaymentType: { select: { id: true, name: true, fixedAmount: true } },
+          },
+        },
+      },
     });
-
-    const { passwordHash: _, ...userWithoutPassword } = user;
 
     // Notify user - fire and forget
     notificationService.onUserCreated({ id: user.id, name: user.name }).catch(() => {});
 
-    return userWithoutPassword;
+    return user;
   }
 
   async findAll(page: number, limit: number) {
@@ -74,6 +123,12 @@ export class UserService {
           role: true, address: true, unitNumber: true, avatarUrl: true,
           isActive: true, isActivated: true, activatedAt: true, createdAt: true, updatedAt: true,
           householdId: true,
+          household: {
+            select: {
+              iplPaymentTypeId: true,
+              iplPaymentType: { select: { id: true, name: true, fixedAmount: true } },
+            },
+          },
         },
       }),
       prisma.user.count(),
@@ -94,6 +149,8 @@ export class UserService {
           select: {
             id: true,
             unitNumber: true,
+            iplPaymentTypeId: true,
+            iplPaymentType: { select: { id: true, name: true, fixedAmount: true } },
             occupancyStatus: true,
             occupancyNote: true,
             homeCurrentStatus: true,
@@ -179,21 +236,33 @@ export class UserService {
       }
     }
 
-    const { unitNumber, ...restInput } = input;
+    const { unitNumber, iplPaymentTypeId, ...restInput } = input;
     const shouldSyncHousehold = Object.prototype.hasOwnProperty.call(input, 'unitNumber');
-    const householdId = shouldSyncHousehold ? await this.findHouseholdIdByUnit(unitNumber) : undefined;
+    const shouldSyncIpl = Object.prototype.hasOwnProperty.call(input, 'iplPaymentTypeId');
+    const householdUnit = shouldSyncHousehold ? unitNumber : (await this.findById(id)).unitNumber;
+    const householdId =
+      shouldSyncHousehold || shouldSyncIpl
+        ? await this.ensureHouseholdForUnit(householdUnit, shouldSyncIpl ? iplPaymentTypeId : undefined, shouldSyncIpl)
+        : undefined;
 
     const user = await prisma.user.update({
       where: { id },
       data: {
         ...restInput,
         ...(shouldSyncHousehold ? { unitNumber, householdId } : {}),
+        ...(!shouldSyncHousehold && shouldSyncIpl ? { householdId } : {}),
       },
       select: {
         id: true, name: true, username: true, phone: true,
         role: true, address: true, unitNumber: true, avatarUrl: true,
         isActive: true, isActivated: true, activatedAt: true, createdAt: true, updatedAt: true,
         householdId: true,
+        household: {
+          select: {
+            iplPaymentTypeId: true,
+            iplPaymentType: { select: { id: true, name: true, fixedAmount: true } },
+          },
+        },
       },
     });
 

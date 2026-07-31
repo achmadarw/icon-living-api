@@ -107,7 +107,12 @@ export class ReportService {
     const [users, paymentPeriods] = await prisma.$transaction([
       prisma.user.findMany({
         where: { isActive: true },
-        select: { id: true, name: true, unitNumber: true },
+        select: {
+          id: true,
+          name: true,
+          unitNumber: true,
+          household: { select: { iplPaymentTypeId: true, iplPaymentType: { select: { fixedAmount: true } } } },
+        },
         orderBy: { unitNumber: 'asc' },
       }),
       prisma.paymentPeriod.findMany({
@@ -118,6 +123,7 @@ export class ReportService {
             select: {
               id: true,
               userId: true,
+              paymentTypeId: true,
               status: true,
               amount: true,
               periods: { select: { id: true } },
@@ -129,11 +135,14 @@ export class ReportService {
 
     const round2 = (n: number) => Math.round(n * 100) / 100;
     const statusMap = new Map<string, { status: 'LUNAS' | 'PENDING'; paymentId: string; transferAmount: number }>();
+    const userRequiredType = new Map(users.map((user) => [user.id, user.household?.iplPaymentTypeId ?? null]));
     let totalNominalMasuk = 0;
     let totalNominalPending = 0;
 
     for (const pp of paymentPeriods) {
       const uid = pp.payment.userId;
+      const requiredTypeId = userRequiredType.get(uid);
+      if (requiredTypeId && pp.payment.paymentTypeId !== requiredTypeId) continue;
       const cur = statusMap.get(uid);
       const periodsCount = pp.payment.periods.length || 1;
       const amountPerPeriod = round2(pp.payment.amount.toNumber() / periodsCount);

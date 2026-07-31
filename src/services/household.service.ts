@@ -6,6 +6,14 @@ import type { CreateHouseholdInput, UpdateHouseholdInput } from '@tia/shared';
 const householdSelect = {
   id: true,
   unitNumber: true,
+  iplPaymentTypeId: true,
+  iplPaymentType: {
+    select: {
+      id: true,
+      name: true,
+      fixedAmount: true,
+    },
+  },
   occupancyStatus: true,
   occupancyNote: true,
   homeCurrentStatus: true,
@@ -72,6 +80,19 @@ const householdSelect = {
 } satisfies Prisma.HouseholdSelect;
 
 export class HouseholdService {
+  private async validateIplPaymentType(id?: string | null) {
+    if (!id) return;
+    const paymentType = await prisma.paymentType.findFirst({
+      where: {
+        id,
+        isActive: true,
+        category: 'IPL',
+      },
+      select: { id: true },
+    });
+    if (!paymentType) throw new NotFoundError('Jenis IPL');
+  }
+
   async findById(id: string) {
     const household = await prisma.household.findUnique({
       where: { id },
@@ -86,9 +107,10 @@ export class HouseholdService {
     const unitNumber = input.unitNumber.trim();
     const existing = await prisma.household.findUnique({ where: { unitNumber } });
     if (existing) throw new DuplicateError('Household unit');
+    await this.validateIplPaymentType(input.iplPaymentTypeId);
 
     const household = await prisma.household.create({
-      data: { unitNumber },
+      data: { unitNumber, iplPaymentTypeId: input.iplPaymentTypeId ?? null },
       select: householdSelect,
     });
 
@@ -102,6 +124,7 @@ export class HouseholdService {
 
   async update(id: string, input: UpdateHouseholdInput) {
     await this.findById(id);
+    await this.validateIplPaymentType(input.iplPaymentTypeId);
 
     const {
       members,

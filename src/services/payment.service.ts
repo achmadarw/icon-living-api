@@ -49,6 +49,24 @@ export class PaymentService {
     return ids;
   }
 
+  private async getUserIplPaymentTypeId(userId: string): Promise<string | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        household: { select: { iplPaymentTypeId: true } },
+      },
+    });
+    return user?.household?.iplPaymentTypeId ?? null;
+  }
+
+  private async validateUserIplObligation(userId: string, paymentType: { id: string; category?: string | null; isMandatory: boolean; name: string }) {
+    if (!this.isIplPaymentType(paymentType)) return;
+    const requiredPaymentTypeId = await this.getUserIplPaymentTypeId(userId);
+    if (requiredPaymentTypeId && requiredPaymentTypeId !== paymentType.id) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Jenis IPL tidak sesuai kewajiban unit rumah');
+    }
+  }
+
   async create(userId: string, input: CreatePaymentInput) {
     const paymentType = await prisma.paymentType.findUnique({
       where: { id: input.paymentTypeId },
@@ -56,6 +74,7 @@ export class PaymentService {
     if (!paymentType || !paymentType.isActive) {
       throw new NotFoundError('Jenis pembayaran');
     }
+    await this.validateUserIplObligation(userId, paymentType);
     this.validatePeriods(paymentType, input.periods);
 
     if ((paymentType.requiresPeriod ?? true) && input.periods.length > 0) {
@@ -169,6 +188,7 @@ export class PaymentService {
     if (!paymentType || !paymentType.isActive) {
       throw new NotFoundError('Jenis pembayaran');
     }
+    await this.validateUserIplObligation(input.userId, paymentType);
     this.validatePeriods(paymentType, input.periods);
 
     const user = await prisma.user.findUnique({
@@ -452,7 +472,12 @@ export class PaymentService {
 
     const users = await prisma.user.findMany({
       where: userWhere,
-      select: { id: true, name: true, unitNumber: true },
+      select: {
+        id: true,
+        name: true,
+        unitNumber: true,
+        household: { select: { iplPaymentTypeId: true } },
+      },
     });
 
     const iplPaymentTypeIds = await this.getIplPaymentTypeIds(paymentTypeId);
@@ -470,7 +495,7 @@ export class PaymentService {
       },
       select: {
         period: true,
-        payment: { select: { userId: true } },
+        payment: { select: { userId: true, paymentTypeId: true } },
       },
     });
 
@@ -486,7 +511,7 @@ export class PaymentService {
       },
       select: {
         period: true,
-        payment: { select: { userId: true } },
+        payment: { select: { userId: true, paymentTypeId: true } },
       },
     });
 
@@ -494,14 +519,20 @@ export class PaymentService {
     const paidMap = new Map<string, Set<string>>();
     const pendingMap = new Map<string, Set<string>>();
 
+    const userRequiredType = new Map(users.map((user) => [user.id, user.household?.iplPaymentTypeId ?? paymentTypeId ?? null]));
+
     for (const p of approvedPeriods) {
       const uid = p.payment.userId;
+      const requiredTypeId = userRequiredType.get(uid);
+      if (requiredTypeId && p.payment.paymentTypeId !== requiredTypeId) continue;
       if (!paidMap.has(uid)) paidMap.set(uid, new Set());
       paidMap.get(uid)!.add(p.period);
     }
 
     for (const p of pendingPeriods) {
       const uid = p.payment.userId;
+      const requiredTypeId = userRequiredType.get(uid);
+      if (requiredTypeId && p.payment.paymentTypeId !== requiredTypeId) continue;
       if (!pendingMap.has(uid)) pendingMap.set(uid, new Set());
       pendingMap.get(uid)!.add(p.period);
     }
@@ -515,7 +546,12 @@ export class PaymentService {
       const unpaid = relevantMonths.filter((m) => !paid.has(m) && !pending.has(m));
 
       return {
-        user,
+        user: {
+          id: user.id,
+          name: user.name,
+          unitNumber: user.unitNumber,
+          iplPaymentTypeId: user.household?.iplPaymentTypeId ?? null,
+        },
         paidMonths: relevantMonths.filter((m) => paid.has(m)),
         pendingMonths: relevantMonths.filter((m) => pending.has(m)),
         unpaidMonths: unpaid,
@@ -528,4 +564,3 @@ export class PaymentService {
 }
 
 export const paymentService = new PaymentService();
-

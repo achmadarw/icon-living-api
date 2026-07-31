@@ -13,6 +13,7 @@ export const createUserSchema = z.object({
   phone: z.string().max(20).optional(),
   role: z.enum(['WARGA', 'BENDAHARA', 'KETUA']),
   unitNumber: z.string().max(20).optional(),
+  iplPaymentTypeId: z.string().nullable().optional(),
   address: z.string().max(255).optional(),
 });
 
@@ -20,6 +21,7 @@ export const updateUserSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   phone: z.string().max(20).optional(),
   unitNumber: z.string().max(20).optional(),
+  iplPaymentTypeId: z.string().nullable().optional(),
   role: z.enum(['WARGA', 'BENDAHARA', 'KETUA']).optional(),
   address: z.string().max(255).optional(),
 });

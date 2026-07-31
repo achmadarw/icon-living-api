@@ -100,6 +100,7 @@ model PaymentType {
   requiresPeriod Boolean @default(true)
 
   payments Payment[]
+  iplHouseholds Household[] @relation("HouseholdIplPaymentType")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -243,6 +244,7 @@ model AccountActivationOtp {
 model Household {
   id                String            @id @default(cuid())
   unitNumber        String            @unique
+  iplPaymentTypeId  String?
   occupancyStatus   OccupancyStatus?
   occupancyNote     String?
   homeCurrentStatus HomeCurrentStatus?
@@ -254,6 +256,7 @@ model Household {
   formSubmittedAt   DateTime?
   sourceRaw         Json?
 
+  iplPaymentType    PaymentType?      @relation("HouseholdIplPaymentType", fields: [iplPaymentTypeId], references: [id], onDelete: SetNull)
   users             User[]
   members           HouseholdMember[]
   vehicles          HouseholdVehicle[]
@@ -265,6 +268,7 @@ model Household {
   updatedAt DateTime @updatedAt
 
   @@map("households")
+  @@index([iplPaymentTypeId])
 }
 
 model HouseholdMember {

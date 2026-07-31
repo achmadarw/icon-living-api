@@ -47,9 +47,11 @@ export const householdHobbyInputSchema = z.object({
 
 export const createHouseholdSchema = z.object({
   unitNumber: z.string().min(1).max(20),
+  iplPaymentTypeId: z.string().nullable().optional(),
 });
 
 export const updateHouseholdSchema = z.object({
+  iplPaymentTypeId: z.string().nullable().optional(),
   occupancyStatus: occupancyStatusSchema.nullable().optional(),
   occupancyNote: nullableLongString,
   homeCurrentStatus: homeCurrentStatusSchema.nullable().optional(),

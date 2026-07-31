@@ -12,6 +12,14 @@ export class AuthService {
     
     const user = await prisma.user.findUnique({
       where: { username: input.username },
+      include: {
+        household: {
+          select: {
+            iplPaymentTypeId: true,
+            iplPaymentType: { select: { id: true, name: true, fixedAmount: true } },
+          },
+        },
+      },
     });
 
     if (!user) {

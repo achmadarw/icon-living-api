@@ -259,7 +259,15 @@ export class ArrearsReminderService {
     // Akun tanpa unit (admin/eksternal) dikecualikan karena tidak wajib IPL.
     const users = await prisma.user.findMany({
       where: { isActive: true, unitNumber: { not: null } },
-      select: { id: true, name: true, unitNumber: true, role: true, phone: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        unitNumber: true,
+        role: true,
+        phone: true,
+        createdAt: true,
+        household: { select: { iplPaymentTypeId: true } },
+      },
       orderBy: { unitNumber: 'asc' },
     });
 
@@ -271,12 +279,15 @@ export class ArrearsReminderService {
               period: { in: [M1, M] },
               payment: { paymentTypeId: { in: iplTypeIds }, status: { in: ['APPROVED', 'PENDING'] } },
             },
-            select: { period: true, payment: { select: { userId: true } } },
+            select: { period: true, payment: { select: { userId: true, paymentTypeId: true } } },
           });
 
     const covered = new Map<string, Set<string>>();
+    const userRequiredType = new Map(users.map((user) => [user.id, user.household?.iplPaymentTypeId ?? null]));
     for (const cp of coveredPeriods) {
       const uid = cp.payment.userId;
+      const requiredTypeId = userRequiredType.get(uid);
+      if (requiredTypeId && cp.payment.paymentTypeId !== requiredTypeId) continue;
       if (!covered.has(uid)) covered.set(uid, new Set());
       covered.get(uid)!.add(cp.period);
     }
@@ -387,7 +398,14 @@ export class ArrearsReminderService {
     // Semua penghuni (punya nomor unit), lintas role.
     const users = await prisma.user.findMany({
       where: { isActive: true, unitNumber: { not: null } },
-      select: { id: true, name: true, unitNumber: true, phone: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        unitNumber: true,
+        phone: true,
+        createdAt: true,
+        household: { select: { iplPaymentTypeId: true, iplPaymentType: { select: { fixedAmount: true } } } },
+      },
     });
 
     // Bulan M-1 & M yang "tertutup" = ada pembayaran IPL APPROVED atau PENDING
@@ -400,12 +418,15 @@ export class ArrearsReminderService {
           status: { in: ['APPROVED', 'PENDING'] },
         },
       },
-      select: { period: true, payment: { select: { userId: true } } },
+      select: { period: true, payment: { select: { userId: true, paymentTypeId: true } } },
     });
 
     const covered = new Map<string, Set<string>>();
+    const userRequiredType = new Map(users.map((user) => [user.id, user.household?.iplPaymentTypeId ?? null]));
     for (const cp of coveredPeriods) {
       const uid = cp.payment.userId;
+      const requiredTypeId = userRequiredType.get(uid);
+      if (requiredTypeId && cp.payment.paymentTypeId !== requiredTypeId) continue;
       if (!covered.has(uid)) covered.set(uid, new Set());
       covered.get(uid)!.add(cp.period);
     }
@@ -466,7 +487,8 @@ export class ArrearsReminderService {
         }
         notified += 1;
 
-        const vars = { name: user.name, unit, period: M, periodPrev: M1, startPeriod: suspensionStart, amount: iplAmount };
+        const userIplAmount = user.household?.iplPaymentType?.fixedAmount?.toNumber() ?? iplAmount;
+        const vars = { name: user.name, unit, period: M, periodPrev: M1, startPeriod: suspensionStart, amount: userIplAmount };
         if (level === 'WARNING') {
           const message = this.renderArrearsTemplate(warningBody, vars);
           await this.notifyResident(user, 'ARREARS_WARNING' as NotificationType, 'Pengingat Tunggakan IPL', message, M);
@@ -760,7 +782,14 @@ export class ArrearsReminderService {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, phone: true, unitNumber: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        unitNumber: true,
+        createdAt: true,
+        household: { select: { iplPaymentTypeId: true } },
+      },
     });
     if (!user) return { lifted: false };
 
@@ -777,14 +806,19 @@ export class ArrearsReminderService {
     }
 
     const iplTypeIds = await this.getIplPaymentTypeIds();
+    const requiredTypeId = user.household?.iplPaymentTypeId ?? null;
     const coveredRows = await prisma.paymentPeriod.findMany({
       where: {
         period: { in: months },
         payment: { paymentTypeId: { in: iplTypeIds }, status: { in: ['APPROVED', 'PENDING'] }, userId },
       },
-      select: { period: true },
+      select: { period: true, payment: { select: { paymentTypeId: true } } },
     });
-    const covered = new Set(coveredRows.map((r) => r.period));
+    const covered = new Set(
+      coveredRows
+        .filter((row) => !requiredTypeId || row.payment.paymentTypeId === requiredTypeId)
+        .map((r) => r.period),
+    );
 
     let hasConsecutive = false;
     for (let i = 0; i < months.length - 1; i += 1) {
