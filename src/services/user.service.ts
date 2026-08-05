@@ -1,9 +1,10 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, DuplicateError, DuplicateUnitError, UnauthorizedError } from '../utils/errors';
+import { NotFoundError, DuplicateError, DuplicateUnitError, UnauthorizedError, ValidationError } from '../utils/errors';
 import { notificationService } from './notification.service';
+import { householdService } from './household.service';
 import { AUTH } from '@tia/shared';
-import type { CreateUserInput, UpdateUserInput, UpdateProfileInput, ChangePasswordInput, ResetPasswordInput } from '@tia/shared';
+import type { CreateUserInput, UpdateUserInput, UpdateProfileInput, ChangePasswordInput, ResetPasswordInput, UpdateHouseholdInput } from '@tia/shared';
 import { logger } from '../utils/logger';
 
 export class UserService {
@@ -281,6 +282,52 @@ export class UserService {
     });
 
     return user;
+  }
+
+  /**
+   * Pastikan user punya household (dibuat dari unitNumber bila belum ada) lalu kembalikan id-nya.
+   * Mengembalikan null bila user tidak punya unitNumber (tidak bisa punya household).
+   */
+  private async ensureMyHouseholdId(userId: string): Promise<string | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, unitNumber: true, householdId: true },
+    });
+    if (!user) throw new NotFoundError('User');
+    if (user.householdId) return user.householdId;
+
+    const unit = user.unitNumber?.trim();
+    if (!unit) return null;
+
+    const household = await prisma.household.upsert({
+      where: { unitNumber: unit },
+      create: { unitNumber: unit },
+      update: {},
+      select: { id: true },
+    });
+
+    // Tautkan household ke user agar konsisten ke depannya.
+    await prisma.user.update({
+      where: { id: userId },
+      data: { householdId: household.id },
+    });
+
+    return household.id;
+  }
+
+  async getMyHousehold(userId: string) {
+    const householdId = await this.ensureMyHouseholdId(userId);
+    if (!householdId) return null;
+    return householdService.findById(householdId);
+  }
+
+  async updateMyHousehold(userId: string, input: UpdateHouseholdInput) {
+    const householdId = await this.ensureMyHouseholdId(userId);
+    if (!householdId) {
+      throw new ValidationError('Akun Anda belum memiliki nomor unit, sehingga data rumah tangga belum bisa diisi. Hubungi pengurus.');
+    }
+    // Field sensitif tidak ada di input self-service, jadi tidak akan tersentuh.
+    return householdService.update(householdId, input);
   }
 
   async changePassword(userId: string, input: ChangePasswordInput) {

@@ -5,6 +5,7 @@ import { buildPaginationMeta } from '../utils/response';
 import { PAGINATION } from '@tia/shared';
 import { logger } from '../utils/logger';
 import { ForbiddenError } from '../utils/errors';
+import { residentExportService, ALL_SCOPES, type ExportScope } from '../services/resident-export.service';
 
 export class UserController {
   async create(req: Request, res: Response, next: NextFunction) {
@@ -79,6 +80,56 @@ export class UserController {
     try {
       await userService.changePassword(req.user!.userId, req.body);
       sendNoContent(res);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /** GET /users/export?format=xlsx|pdf&scope=household,members,... — unduh data warga. */
+  async exportResidents(req: Request, res: Response, next: NextFunction) {
+    try {
+      const format = (req.query.format as string) === 'pdf' ? 'pdf' : 'xlsx';
+      const scopeRaw = typeof req.query.scope === 'string' ? req.query.scope : '';
+      const requested = scopeRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s): s is ExportScope => (ALL_SCOPES as string[]).includes(s));
+      const scopes = requested.length > 0 ? requested : ALL_SCOPES;
+
+      const sections = await residentExportService.buildSections(scopes);
+      const stamp = new Date().toISOString().slice(0, 10);
+
+      if (format === 'pdf') {
+        const buffer = await residentExportService.buildPdf(sections);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="data-warga-${stamp}.pdf"`);
+        res.setHeader('Content-Length', buffer.length);
+        return res.end(buffer);
+      }
+
+      const buffer = residentExportService.buildXlsx(sections);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="data-warga-${stamp}.xlsx"`);
+      res.setHeader('Content-Length', buffer.length);
+      return res.end(buffer);
+    } catch (err) {
+      return next(err);
+    }
+  }
+
+  async findMyHousehold(req: Request, res: Response, next: NextFunction) {
+    try {
+      const household = await userService.getMyHousehold(req.user!.userId);
+      sendSuccess(res, household);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateMyHousehold(req: Request, res: Response, next: NextFunction) {
+    try {
+      const household = await userService.updateMyHousehold(req.user!.userId, req.body);
+      sendSuccess(res, household);
     } catch (err) {
       next(err);
     }
