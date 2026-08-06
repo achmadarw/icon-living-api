@@ -22,8 +22,11 @@ const MONTH_NAMES_EN = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-/** Nama hari singkat ala TIA (Sun..Sat). */
-const DAY_NAMES_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/**
+ * Nama hari satu huruf dalam bahasa Indonesia, indeks 0 = Minggu.
+ * Persis seperti peta hari yang dipakai TIA saat menyiapkan data export.
+ */
+const DAY_LETTERS_ID = ['M', 'S', 'S', 'R', 'K', 'J', 'S'];
 
 export class RosterPdfService {
   /** Rakit data untuk template, mengikuti bentuk yang diharapkan TIA. */
@@ -88,14 +91,21 @@ export class RosterPdfService {
           shiftsPerDay.push({ shiftCode: code ?? 'O', isOff: !code });
         }
 
-        return { name: person.name, shifts: shiftsPerDay, firstOffDay, index };
+        // Nama dikapitalkan hanya untuk cetakan, mengikuti tampilan PDF TIA.
+        // Data aslinya di database tidak diubah.
+        return {
+          name: person.name.toUpperCase(),
+          shifts: shiftsPerDay,
+          firstOffDay,
+          index,
+        };
       })
       .sort((a, b) => a.firstOffDay - b.firstOffDay || a.index - b.index)
       .map(({ name, shifts: shiftsPerDay }) => ({ name, shifts: shiftsPerDay }));
 
     const dayNames = Array.from({ length: totalDays }, (_, i) => {
       const weekday = new Date(year, monthNum - 1, i + 1).getDay();
-      return DAY_NAMES_EN[weekday];
+      return DAY_LETTERS_ID[weekday];
     });
 
     // Template TIA membaca `start_time`/`end_time` (gaya SQL), jadi dipetakan.

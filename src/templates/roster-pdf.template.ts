@@ -519,8 +519,7 @@ function generateRosterPDFHTML(data) {
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
-                'Liberation Sans', 'DejaVu Sans', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
             margin: 0;
             padding: 8px;
             background: #F9FAFB;
@@ -575,7 +574,10 @@ function generateRosterPDFHTML(data) {
         
         .header-text h3 {
             margin: 1px 0;
-            font-size: 15pt;
+            font-size: 17pt;
+            letter-spacing: 0.3px;
+            /* TIA menulis 600, tapi font di server-nya tak punya varian semi-bold
+               sehingga tercetak tebal penuh. 700 dipakai agar hasilnya sama. */
             font-weight: 700;
             color: #000000;
             line-height: 1.3;
@@ -583,7 +585,7 @@ function generateRosterPDFHTML(data) {
         
         .header-text h2 {
             margin: 25px 0 0 0;
-            font-size: 16pt;
+            font-size: 18pt;
             font-weight: 700;
             color: #000000;
             text-transform: uppercase;
