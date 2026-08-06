@@ -11,7 +11,7 @@ export const createUserSchema = z.object({
     .regex(USERNAME_REGEX, 'Username hanya boleh huruf kecil, angka, dan underscore'),
   password: z.string().min(8, 'Password minimal 8 karakter'),
   phone: z.string().max(20).optional(),
-  role: z.enum(['WARGA', 'BENDAHARA', 'KETUA']),
+  role: z.enum(['WARGA', 'BENDAHARA', 'KETUA', 'SEKSI_KEAMANAN']),
   unitNumber: z.string().max(20).optional(),
   iplPaymentTypeId: z.string().nullable().optional(),
   address: z.string().max(255).optional(),
@@ -22,7 +22,7 @@ export const updateUserSchema = z.object({
   phone: z.string().max(20).optional(),
   unitNumber: z.string().max(20).optional(),
   iplPaymentTypeId: z.string().nullable().optional(),
-  role: z.enum(['WARGA', 'BENDAHARA', 'KETUA']).optional(),
+  role: z.enum(['WARGA', 'BENDAHARA', 'KETUA', 'SEKSI_KEAMANAN']).optional(),
   address: z.string().max(255).optional(),
 });
 

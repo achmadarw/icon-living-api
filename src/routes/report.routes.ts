@@ -19,7 +19,8 @@ const router: RouterType = Router();
 
 // All report endpoints require authentication.
 router.use(authenticate);
-router.use(authorize('WARGA', 'BENDAHARA', 'KETUA'));
+// Seksi Keamanan punya akses baca yang sama dengan warga.
+router.use(authorize('WARGA', 'SEKSI_KEAMANAN', 'BENDAHARA', 'KETUA'));
 
 // ─── IPL Monthly ────────────────────────────────────────
 router.get(

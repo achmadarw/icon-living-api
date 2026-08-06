@@ -13,6 +13,7 @@ enum Role {
   WARGA
   BENDAHARA
   KETUA
+  SEKSI_KEAMANAN
 }
 
 enum PaymentStatus {
@@ -577,6 +578,156 @@ model WhatsappDelivery {
   @@index([fonnteId])
   @@index([source, createdAt])
   @@map("whatsapp_deliveries")
+}
+
+// ─── Keamanan / Roster Satpam ───────────────────────────
+//
+// Catatan desain (lihat docs/security-roster-migration-analysis.md):
+// - Semua tanggal disimpan sebagai String "YYYY-MM-DD" (bulan: "YYYY-MM-01"),
+//   mengikuti konvensi `period` yang sudah dipakai modul pembayaran. Ini menghindari
+//   pergeseran timezone yang di TIA disiasati dengan merakit tanggal secara manual.
+// - `patternData` berisi NOMOR shift (0 = OFF, selebihnya cocok dengan SecurityShift.code),
+//   bukan id shift seperti di TIA, agar tidak bergantung pada id database.
+
+/// Personel satpam. Bukan User — mereka tidak login ke sistem, hanya dijadwalkan.
+model SecurityPersonnel {
+  id       String  @id @default(cuid())
+  name     String
+  phone    String?
+  isActive Boolean @default(true)
+  note     String?
+
+  /// Penentu urutan baris pola saat Auto Assign (diambil desc, sama seperti TIA).
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rosterAssignments RosterAssignment[]
+  shiftAssignments  ShiftAssignment[]
+  dayOverrides      RosterDayOverride[]
+
+  @@index([isActive])
+  @@map("security_personnel")
+}
+
+/// Master shift satpam. `code` ("1","2","3") dipakai memetakan nilai pada patternData.
+model SecurityShift {
+  id          String  @id @default(cuid())
+  name        String
+  code        String  @unique
+  startTime   String // "07:00"
+  endTime     String // "16:00"
+  color       String?
+  description String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shiftAssignments ShiftAssignment[]
+  dayOverrides     RosterDayOverride[]
+
+  @@index([isActive])
+  @@map("security_shifts")
+}
+
+/// Pustaka pola: siklus 5 atau 7 hari. 0 = OFF.
+model RosterPattern {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  patternData Int[]
+  isActive    Boolean @default(true)
+
+  usageCount  Int       @default(0)
+  lastUsedAt  DateTime?
+  createdById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments RosterAssignment[]
+
+  @@index([isActive])
+  @@map("roster_patterns")
+}
+
+/// Pemetaan personel → pola untuk satu bulan.
+model RosterAssignment {
+  id              String  @id @default(cuid())
+  personnelId     String
+  patternId       String
+  assignmentMonth String // "YYYY-MM-01"
+  assignedById    String?
+  notes           String?
+
+  assignedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  personnel SecurityPersonnel @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  pattern   RosterPattern     @relation(fields: [patternId], references: [id], onDelete: Cascade)
+
+  @@unique([personnelId, assignmentMonth])
+  @@index([assignmentMonth])
+  @@map("roster_assignments")
+}
+
+/// Hasil expand pola menjadi jadwal harian. Hari OFF TIDAK disimpan (sama seperti TIA).
+model ShiftAssignment {
+  id                  String  @id @default(cuid())
+  personnelId         String
+  shiftId             String
+  assignmentDate      String // "YYYY-MM-DD"
+  isReplacement       Boolean @default(false)
+  replacedPersonnelId String?
+  notes               String?
+  createdById         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  personnel SecurityPersonnel @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  shift     SecurityShift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@unique([personnelId, assignmentDate, shiftId])
+  @@index([assignmentDate])
+  @@index([personnelId, assignmentDate])
+  @@map("security_shift_assignments")
+}
+
+/// Perubahan manual satu hari lewat kalender. shiftId null = dijadikan OFF.
+model RosterDayOverride {
+  id           String  @id @default(cuid())
+  personnelId  String
+  overrideDate String // "YYYY-MM-DD"
+  shiftId      String?
+  createdById  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  personnel SecurityPersonnel @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  shift     SecurityShift?    @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+
+  @@unique([personnelId, overrideDate])
+  @@index([overrideDate])
+  @@map("roster_day_overrides")
+}
+
+/// Cadangan roster sebelum Auto Assign, agar bisa di-Undo.
+model RosterAutoAssignSnapshot {
+  id                String @id @default(cuid())
+  assignmentMonth   String // "YYYY-MM-01"
+  rosterAssignments Json   @default("[]")
+  shiftAssignments  Json   @default("[]")
+  createdById       String?
+
+  createdAt    DateTime  @default(now())
+  restoredAt   DateTime?
+  restoredById String?
+
+  @@index([assignmentMonth])
+  @@index([assignmentMonth, restoredAt, createdAt])
+  @@map("roster_auto_assign_snapshots")
 }
 
 // ─── Audit ──────────────────────────────────────────────

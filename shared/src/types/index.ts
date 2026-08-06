@@ -2,6 +2,7 @@ export enum Role {
   WARGA = 'WARGA',
   BENDAHARA = 'BENDAHARA',
   KETUA = 'KETUA',
+  SEKSI_KEAMANAN = 'SEKSI_KEAMANAN',
 }
 
 export enum PaymentStatus {

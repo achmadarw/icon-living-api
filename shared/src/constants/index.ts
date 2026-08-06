@@ -21,5 +21,7 @@ export const UPLOAD = {
 
 export const ROLES = {
   PENGURUS: ['BENDAHARA', 'KETUA'] as const,
-  ALL: ['WARGA', 'BENDAHARA', 'KETUA'] as const,
+  // Pengelola menu Keamanan (roster satpam). Ketua ikut agar bisa menjalankan Auto Assign.
+  KEAMANAN: ['KETUA', 'SEKSI_KEAMANAN'] as const,
+  ALL: ['WARGA', 'BENDAHARA', 'KETUA', 'SEKSI_KEAMANAN'] as const,
 } as const;
