@@ -154,13 +154,24 @@ export class RosterPdfService {
     let browser: any = null;
 
     try {
+      // Di server (Railway) Chromium dipasang lewat nixpacks.toml, bukan diunduh
+      // Puppeteer. Path-nya diberikan lewat env agar tidak dikunci ke satu lokasi.
+      const executablePath =
+        process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROMIUM_PATH || undefined;
+
       browser = await puppeteer.launch({
         headless: true,
+        ...(executablePath ? { executablePath } : {}),
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
+          // Wajib di container: /dev/shm bawaan Docker terlalu kecil untuk Chromium.
           '--disable-dev-shm-usage',
           '--disable-gpu',
+          // Menekan pemakaian memori agar container tidak kehabisan RAM lalu dimatikan.
+          '--single-process',
+          '--no-zygote',
+          '--disable-extensions',
         ],
       });
 

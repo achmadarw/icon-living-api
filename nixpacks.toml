@@ -1,0 +1,20 @@
+# Konfigurasi build Railway/Nixpacks untuk API.
+#
+# Tujuan utama: menyiapkan Chromium untuk export PDF roster TANPA membuat
+# Puppeteer mengunduh Chromium-nya sendiri saat `npm install`.
+#
+# Kenapa penting:
+# - Unduhan Chromium bawaan Puppeteer berukuran ~300 MB. Itu memperlambat build,
+#   memperbesar image, dan rawan gagal saat disk build terbatas.
+# - Image Node bawaan Nixpacks TIDAK punya pustaka sistem yang dibutuhkan
+#   Chromium, sehingga `browser.launch()` gagal meski paketnya terpasang.
+# - Tanpa paket font, teks pada PDF jatuh ke font bawaan yang berbeda. Dengan
+#   dejavu_fonts terpasang, hasil cetak menyamai server TIA.
+
+[phases.setup]
+nixPkgs = ["...", "chromium", "fontconfig", "dejavu_fonts", "liberation_ttf"]
+
+[variables]
+# Jangan unduh Chromium saat install — kita pakai yang dari nixPkgs di atas.
+PUPPETEER_SKIP_DOWNLOAD = "1"
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "1"
