@@ -12,7 +12,6 @@ import {
   daysInMonth,
   derangeUsers,
   formatDateString,
-  generateDailyOffUserIndexes,
   generateRandomAutoPattern,
   getNextOffDayIndexes,
   getPreviousMonthInfo,
@@ -333,20 +332,16 @@ export class RosterAutoAssignService {
         );
       }
 
-      const maxLastOffDay = Math.max(...previousLastOff.lastOffDays.map((i) => i.lastOffDay));
-      const lastOffIndex = personnel.findIndex((person) =>
-        previousLastOff.lastOffDays!.some(
-          (item) => item.personnelId === person.id && item.lastOffDay === maxLastOffDay,
-        ),
-      );
+      const dailyOffUserIndexes = [...previousLastOff.lastOffDays]
+        .sort((a, b) => a.lastOffDay - b.lastOffDay)
+        .map((item) => personnel.findIndex((person) => person.id === item.personnelId));
 
-      if (lastOffIndex < 0) {
+      if (dailyOffUserIndexes.some((index) => index < 0)) {
         throw new AutoAssignError(
-          'Lanjutkan Bulan Sebelumnya tidak menemukan personel yang OFF terakhir bulan lalu.',
+          'Lanjutkan Bulan Sebelumnya tidak menemukan personel dari urutan OFF bulan lalu.',
         );
       }
 
-      const dailyOffUserIndexes = generateDailyOffUserIndexes(lastOffIndex);
       const continued = createRowsFromDailyOffUserIndexes(
         dailyOffUserIndexes,
         template,
