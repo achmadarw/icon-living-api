@@ -566,6 +566,10 @@ export function createRowsFromDailyOffUserIndexes(
     return { rows: null, error: `Daily OFF pattern must contain ${template.patternLength} days` };
   }
 
+  if (new Set(dailyOffUserIndexes).size !== dailyOffUserIndexes.length) {
+    return { rows: null, error: 'Daily OFF pattern must not contain duplicate personnel indexes' };
+  }
+
   for (let dayIndex = 0; dayIndex < template.patternLength; dayIndex++) {
     const offUserIndex = dailyOffUserIndexes[dayIndex];
 
@@ -575,7 +579,9 @@ export function createRowsFromDailyOffUserIndexes(
 
     rows[offUserIndex][dayIndex] = 0;
     rotationPattern.shiftsAfterOff.forEach((shiftNumber, offsetIndex) => {
-      const userIndex = (offUserIndex + 5 - offsetIndex - 1) % 5;
+      const previousOffDayIndex =
+        (dayIndex + template.patternLength - offsetIndex - 1) % template.patternLength;
+      const userIndex = dailyOffUserIndexes[previousOffDayIndex];
       rows[userIndex][dayIndex] = shiftNumber;
     });
   }
