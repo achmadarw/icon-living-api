@@ -107,13 +107,22 @@ export class RosterAutoAssignService {
     const patternResult = await this.readPreviousPatternRows(personnel, previousMonth);
     if (!patternResult.rows) return { states: null, error: patternResult.error };
 
-    const shiftRows = await prisma.shiftAssignment.findMany({
-      where: {
-        assignmentDate: previousLastDate,
-        personnelId: { in: personnel.map((p) => p.id) },
-      },
-      include: { shift: { select: { code: true } } },
-    });
+    const [shiftRows, overrideRows] = await Promise.all([
+      prisma.shiftAssignment.findMany({
+        where: {
+          assignmentDate: previousLastDate,
+          personnelId: { in: personnel.map((p) => p.id) },
+        },
+        include: { shift: { select: { code: true } } },
+      }),
+      prisma.rosterDayOverride.findMany({
+        where: {
+          overrideDate: previousLastDate,
+          personnelId: { in: personnel.map((p) => p.id) },
+        },
+        include: { shift: { select: { code: true } } },
+      }),
+    ]);
 
     const shiftByPersonnel = new Map<string, number>();
     for (const row of shiftRows) {
@@ -126,11 +135,24 @@ export class RosterAutoAssignService {
       shiftByPersonnel.set(row.personnelId, Number(row.shift.code));
     }
 
+    const overrideByPersonnel = new Map(
+      overrideRows.map((row) => [
+        row.personnelId,
+        row.shiftId === null ? 0 : Number(row.shift?.code),
+      ]),
+    );
+
     const states: number[] = [];
     const lastDay = Number(previousLastDate.slice(8, 10));
 
     personnel.forEach((person, index) => {
       const patternRow = patternResult.rows![index];
+      const fromOverride = overrideByPersonnel.get(person.id);
+      if (fromOverride !== undefined) {
+        states.push(fromOverride);
+        return;
+      }
+
       const fromShift = shiftByPersonnel.get(person.id);
       // Tanpa baris jadwal berarti hari itu OFF; jatuh kembali ke pola.
       states.push(fromShift ?? patternRow[(lastDay - 1) % patternRow.length]);
@@ -151,17 +173,39 @@ export class RosterAutoAssignService {
     const patternResult = await this.readPreviousPatternRows(personnel, previousMonth);
     if (!patternResult.rows) return { lastOffDays: null, error: patternResult.error };
 
-    const shiftRows = await prisma.shiftAssignment.findMany({
-      where: {
-        assignmentDate: { startsWith: monthPrefix(previousMonth) },
-        personnelId: { in: personnel.map((p) => p.id) },
-      },
-      select: { personnelId: true, assignmentDate: true },
-    });
+    const [shiftRows, overrideRows] = await Promise.all([
+      prisma.shiftAssignment.findMany({
+        where: {
+          assignmentDate: { startsWith: monthPrefix(previousMonth) },
+          personnelId: { in: personnel.map((p) => p.id) },
+        },
+        select: { personnelId: true, assignmentDate: true },
+      }),
+      prisma.rosterDayOverride.findMany({
+        where: {
+          overrideDate: { startsWith: monthPrefix(previousMonth) },
+          personnelId: { in: personnel.map((p) => p.id) },
+        },
+        select: { personnelId: true, overrideDate: true, shiftId: true },
+      }),
+    ]);
 
     const workedDays = new Map<string, Set<number>>(personnel.map((p) => [p.id, new Set<number>()]));
     for (const row of shiftRows) {
       workedDays.get(row.personnelId)?.add(Number(row.assignmentDate.slice(8, 10)));
+    }
+
+    const overrideOffDays = new Map<string, Set<number>>(personnel.map((p) => [p.id, new Set<number>()]));
+    const overrideWorkDays = new Map<string, Set<number>>(personnel.map((p) => [p.id, new Set<number>()]));
+    for (const row of overrideRows) {
+      const day = Number(row.overrideDate.slice(8, 10));
+      if (row.shiftId === null) {
+        overrideOffDays.get(row.personnelId)?.add(day);
+        workedDays.get(row.personnelId)?.delete(day);
+      } else {
+        overrideWorkDays.get(row.personnelId)?.add(day);
+        workedDays.get(row.personnelId)?.add(day);
+      }
     }
 
     const lastOffDays: { personnelId: string; personnelName: string; lastOffDay: number }[] = [];
@@ -174,6 +218,12 @@ export class RosterAutoAssignService {
 
       for (let day = previousDays; day >= 1; day--) {
         const patternIndex = (day - 1) % patternRow.length;
+        if (overrideOffDays.get(person.id)?.has(day)) {
+          lastOffDay = day;
+          break;
+        }
+        if (overrideWorkDays.get(person.id)?.has(day)) continue;
+
         // Hari dianggap OFF hanya bila tidak ada jadwal DAN polanya OFF.
         if (!worked.has(day) && patternRow[patternIndex] === 0) {
           lastOffDay = day;
