@@ -194,6 +194,43 @@ describe('5p-2s — rotasi harian', () => {
     expect(validateAutoPatternRows(result.rows!, T2)).toEqual({ isValid: true });
   });
 
+  it('menampilkan pola 1122OFF sesuai label pilihan', () => {
+    const rows = createRowsFromDailyOffUserIndexes(
+      [0, 1, 2, 3, 4],
+      T2,
+      TWO_SHIFT_ROTATION_PATTERNS['1122-off'],
+    ).rows!;
+
+    expect(rows[0]).toEqual([0, 1, 1, 2, 2]);
+  });
+
+  it('menampilkan pola 2211OFF sesuai label pilihan', () => {
+    const rows = createRowsFromDailyOffUserIndexes(
+      [0, 1, 2, 3, 4],
+      T2,
+      TWO_SHIFT_ROTATION_PATTERNS['2211-off'],
+    ).rows!;
+
+    expect(rows[0]).toEqual([0, 2, 2, 1, 1]);
+  });
+
+  it('menjaga label pola saat urutan OFF tidak mengikuti urutan index personel', () => {
+    const continuedOffOrder = [3, 2, 1, 0, 4];
+    const rows1122 = createRowsFromDailyOffUserIndexes(
+      continuedOffOrder,
+      T2,
+      TWO_SHIFT_ROTATION_PATTERNS['1122-off'],
+    ).rows!;
+    const rows2211 = createRowsFromDailyOffUserIndexes(
+      continuedOffOrder,
+      T2,
+      TWO_SHIFT_ROTATION_PATTERNS['2211-off'],
+    ).rows!;
+
+    expect(rows1122[3]).toEqual([0, 1, 1, 2, 2]);
+    expect(rows2211[3]).toEqual([0, 2, 2, 1, 1]);
+  });
+
   it('memastikan tepat 1 orang OFF dan 2 orang shift 1 setiap hari', () => {
     const rows = createRowsFromDailyOffUserIndexes(
       [0, 1, 2, 3, 4],

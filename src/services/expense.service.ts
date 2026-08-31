@@ -1,9 +1,14 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { NotFoundError, InvalidStatusError, InsufficientBalanceError } from '../utils/errors';
+import { NotFoundError, InvalidStatusError, InsufficientBalanceError, ValidationError } from '../utils/errors';
 import { notificationService } from './notification.service';
 import { acquireLedgerLock, getLastLedgerState, rebuildLedgerTailFromOrder } from './ledger.service';
 import type { CreateExpenseInput, UpdateExpenseInput, ExpenseQuery } from '@tia/shared';
+
+const LEDGER_TRANSACTION_OPTIONS = {
+  maxWait: 10000,
+  timeout: 60000,
+};
 
 export class ExpenseService {
   async create(requestedById: string, input: CreateExpenseInput) {
@@ -117,7 +122,7 @@ export class ExpenseService {
       }
 
       return expense;
-    });
+    }, LEDGER_TRANSACTION_OPTIONS);
   }
 
   async findAll(requester: { userId: string; role: string }, query: ExpenseQuery) {
@@ -225,7 +230,7 @@ export class ExpenseService {
       }
 
       return updated;
-    });
+    }, LEDGER_TRANSACTION_OPTIONS);
 
     // Notify bendahara about approval - fire and forget
     notificationService.onExpenseApproved({
@@ -273,10 +278,6 @@ export class ExpenseService {
   async update(id: string, input: UpdateExpenseInput) {
     const expense = await this.findById(id);
 
-    if (expense.status === 'APPROVED') {
-      throw new InvalidStatusError(expense.status, 'SUBMITTED/REJECTED/DRAFT');
-    }
-
     const category = await prisma.expenseCategory.findUnique({
       where: { id: input.categoryId },
     });
@@ -284,24 +285,51 @@ export class ExpenseService {
       throw new NotFoundError('Kategori pengeluaran');
     }
 
-    const updated = await prisma.expense.update({
-      where: { id },
-      data: {
-        categoryId: input.categoryId,
-        amount: input.amount,
-        description: input.description,
-        expenseDate: new Date(input.expenseDate),
-        paymentMethod: input.paymentMethod,
-        recipient: input.recipient,
-        referenceNumber: input.referenceNumber,
-        attachmentUrl: input.attachmentUrl,
-      },
-      include: {
-        category: { select: { id: true, name: true } },
-        requestedBy: { select: { id: true, name: true } },
-        approvedBy: { select: { id: true, name: true } },
-      },
-    });
+    const businessDate = new Date(input.expenseDate);
+    const updated = await prisma.$transaction(async (tx) => {
+      await acquireLedgerLock(tx);
+
+      if (expense.status === 'APPROVED') {
+        if (!expense.transactionId || !expense.transaction) {
+          throw new ValidationError('Pengeluaran disetujui tidak memiliki transaksi ledger');
+        }
+
+        const balanceBefore = expense.transaction.balanceBefore.toNumber();
+        if (balanceBefore < input.amount) {
+          throw new InsufficientBalanceError();
+        }
+
+        await tx.transaction.update({
+          where: { id: expense.transactionId },
+          data: {
+            amount: input.amount,
+            description: `Pengeluaran ${category.name}: ${input.description}`,
+            createdAt: businessDate,
+          },
+        });
+
+        await rebuildLedgerTailFromOrder(tx, expense.transaction.ledgerOrder);
+      }
+
+      return tx.expense.update({
+        where: { id },
+        data: {
+          categoryId: input.categoryId,
+          amount: input.amount,
+          description: input.description,
+          expenseDate: businessDate,
+          paymentMethod: input.paymentMethod,
+          recipient: input.recipient,
+          referenceNumber: input.referenceNumber,
+          attachmentUrl: input.attachmentUrl,
+        },
+        include: {
+          category: { select: { id: true, name: true } },
+          requestedBy: { select: { id: true, name: true } },
+          approvedBy: { select: { id: true, name: true } },
+        },
+      });
+    }, LEDGER_TRANSACTION_OPTIONS);
 
     return updated;
   }
